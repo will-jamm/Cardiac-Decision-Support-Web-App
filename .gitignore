@@ -30,3 +30,5 @@ logs/
 dist/
 build/
 *.egg-info/
+
+*test_studentFHIR.py
