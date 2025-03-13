@@ -1,5 +1,7 @@
 import json
 from datetime import date, datetime
+JSON_DATABASE = 'data/json_database.json'
+fullUrl = "http://tutsgnfhir.com"
 
 class FHIRClient(object):
     def __init__(self, server_url, json_path):
@@ -50,10 +52,90 @@ class FHIRClient(object):
         """Return list of all patient IDs"""
         return self.patient_ids
     
-    def get_resources(self, patient_id):
+    def _get_coding(self, resource):
+        """
+        Extract the coding information from a FHIR resource.
+        
+        This method tries to access the 'coding' field within the 'code' element 
+        of the resource. If the path exists, returns the coding information, 
+        otherwise returns None.
+        
+        Parameters:
+        -----------
+        resource : dict
+            A FHIR resource represented as a dictionary.
+            
+        Returns:
+        --------
+        list or None
+            The coding information if available, or None if the path doesn't exist.
+        """
+        if 'code' in resource and 'coding' in resource['code']:
+            return resource['code']['coding']
+        return None
+
+    def get_weight_history(self, patient_id):
+        """
+        Retrieves the weight history for a specified patient.
+        This method fetches all observations for the patient and filters for weight measurements,
+        identified by LOINC code '3141-9' or by having 'weight' in the display text.
+        Parameters:
+        ----------
+        patient_id : str
+            The FHIR ID of the patient whose weight history is being requested.
+        Returns:
+        -------
+        list or None:
+            A list of dictionaries containing weight measurements sorted by date, or None if the patient data
+            could not be retrieved.
+            Each dictionary contains:
+            - 'date': datetime object representing the observation date
+            - 'value': numeric weight value
+            - 'unit': unit of measurement (defaults to 'kg')
+            - 'formatted_date': the date formatted as 'YYYY-MM-DD'
+            - 'display': formatted string combining the value and unit (e.g., "70 kg")
+        Notes:
+        -----
+        The method continues processing even if some observations have invalid or missing data.
+        """
+        weight_history= []
         patient_data = self.get_all_patient_data(patient_id)
         
-        if patient_data:
-            return[resource['resource']['resourceType'] for resource in patient_data]
-        return None
+        if not patient_data:
+            return None
+        
+        for entry in patient_data:
+            if 'resource' not in entry:
+                continue
+
+            resource = entry['resource']
+            if resource['resourceType'] == 'Observation':
+                isWeight = False
+                coding_list = self._get_coding(resource)
+        
+                for coding in coding_list:
+                    if coding.get('code') == '3141-9' or 'weight' in coding.get('display', '').lower():
+                        isWeight = True
+                        break
+
+                if isWeight == True:
+                    try:
+                        weight_value = resource['valueQuantity'].get('value')
+                        weight_unit = resource['valueQuantity'].get('unit', 'kg')
+                        date_str = resource['effectiveDateTime']
+                        observation_date = datetime.strptime(date_str, '%Y-%m-%d')
+                        print(observation_date)
+                        weight_history.append({
+                            'date': observation_date,
+                            'value': weight_value,
+                            'unit': weight_unit,
+                            'formatted_date': observation_date.strftime('%Y-%m-%d'),
+                            'display': f"{weight_value} {weight_unit}"
+                        })
+                    except (ValueError, KeyError) as e:
+                        continue
+            weight_history.sort(key=lambda x: x['date'])
+            
+        return weight_history
+    
             
