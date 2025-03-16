@@ -73,464 +73,169 @@ class FHIRClient(object):
         if 'code' in resource and 'coding' in resource['code']:
             return resource['code']['coding']
         return None
-
-    def get_weight_history(self, patient_id):
+    def _append_observation_data(self, observations, resource, unit, name):
         """
-        Retrieves the weight history for a specified patient.
-        This method fetches all observations for the patient and filters for weight measurements,
-        identified by LOINC code '3141-9' or by having 'weight' in the display text.
+        Append FHIR observation data to a list of observations.
+        This method extracts relevant information from a FHIR observation resource 
+        and adds it to the provided observations list in a structured format.
+        Args:
+            observations (list): List to append the observation data to
+            resource (dict): FHIR observation resource containing the data
+            unit (str): Default unit to use if not specified in the resource
+            name (str): Display name for the observation
+        Returns:
+            list: Updated observations list with the new observation appended
+        Note:
+            The resource is expected to contain 'valueQuantity' and 'effectiveDateTime' fields.
+            The formatted observation includes the date, value, unit, a formatted date string,
+            a display string, and the observation name.
+        """
+        
+        value = resource['valueQuantity'].get('value')
+        observation_unit = resource['valueQuantity'].get('unit', unit)
+        date_str = resource['effectiveDateTime']
+        observation_date = datetime.strptime(date_str, '%Y-%m-%d')
+        observations.append({
+            'date': observation_date,
+            'value': value,
+            'unit': observation_unit,
+            'formatted_date': observation_date.strftime('%Y-%m-%d'),
+            'display': f"{value:.2f} {unit}",
+            'name': name
+        })
+        return observations
+        
+        
+    def _get_observation_history(self, patient_id, observation_codes, default_unit='', name=''):
+        """
+        Retrieves observation history for a patient with the specified observation codes.
+        This method fetches all patient data and filters for specific observation resources
+        matching the provided codes or display name.
         Parameters:
         ----------
         patient_id : str
-            The FHIR ID of the patient whose weight history is being requested.
+            The ID of the patient to retrieve observations for.
+        observation_codes : dict
+            Dictionary mapping observation codes to their names. Used to identify relevant observations.
+        default_unit : str, optional
+            The default unit to use if not specified in the observation. Defaults to empty string.
+        name : str, optional
+            Name of the observation to filter by display name. Defaults to empty string.
         Returns:
         -------
-        list or None:
-            A list of dictionaries containing weight measurements sorted by date, or None if the patient data
-            could not be retrieved.
-            Each dictionary contains:
-            - 'date': datetime object representing the observation date
-            - 'value': numeric weight value
-            - 'unit': unit of measurement (defaults to 'kg')
-            - 'formatted_date': the date formatted as 'YYYY-MM-DD'
-            - 'display': formatted string combining the value and unit (e.g., "70 kg")
-        Notes:
-        -----
-        The method continues processing even if some observations have invalid or missing data.
+        list
+            A list of dictionaries containing observation data, sorted by date.
+            Each dictionary contains date, value, and unit information.
+            Returns an empty list if patient data is not found or no matching observations exist.
         """
-        weight_history= []
         patient_data = self.get_all_patient_data(patient_id)
-        
+
         if not patient_data:
-            return None
+            return []
         
         for entry in patient_data:
             if 'resource' not in entry:
                 continue
 
             resource = entry['resource']
-            if resource['resourceType'] == 'Observation':
-                isWeight = False
-                coding_list = self._get_coding(resource)
-        
-                for coding in coding_list:
-                    if coding.get('code') == '3141-9' or 'weight' in coding.get('display', '').lower():
-                        isWeight = True
-                        break
+            if resource['resourceType'] != 'Observation':
+                continue
 
-                if isWeight == True:
-                    try:
-                        weight_value = resource['valueQuantity'].get('value')
-                        weight_unit = resource['valueQuantity'].get('unit', 'kg')
-                        date_str = resource['effectiveDateTime']
-                        observation_date = datetime.strptime(date_str, '%Y-%m-%d')
-                        print(observation_date)
-                        weight_history.append({
-                            'date': observation_date,
-                            'value': weight_value,
-                            'unit': weight_unit,
-                            'formatted_date': observation_date.strftime('%Y-%m-%d'),
-                            'display': f"{weight_value} {weight_unit}"
-                        })
-                    except (ValueError, KeyError) as e:
-                        continue
-            weight_history.sort(key=lambda x: x['date'])
-            
-        return weight_history
+            is_target_observation = False
+            coding_list = self._get_coding(resource)
+
+            if not coding_list:
+                continue
+
+            for coding in coding_list:
+                code = coding.get('code')
+                display = coding.get('display', '').lower()
+
+                if code in observation_codes:
+                    is_target_observation = True
+                    observation_name = observation_codes[code]
+                    break
+
+                elif name and name.lower() in display:
+                    is_target_observation = True
+                    observation_name = name
+                    break
+
+            if not is_target_observation:
+                continue
+
+            observations = self._append_observation_data(observations=[], resource=resource, unit=default_unit, name=name)
+
+        observations.sort(key=lambda x: x['date'])
+        return observations
+    
+    def get_weight_history(self, patient_id):
+        """Get weight history for patient"""
+        return self._get_observation_history(
+            patient_id,
+            {'3141-9': 'Weight'},
+            default_unit='kg',
+            name='weight'
+        )
 
     def get_height_history(self, patient_id):
-        """
-        Retrieves the height history for a specified patient.
-        This method fetches all observations for the patient and filters for height measurements,
-        identified by LOINC code '8302-2' or by having 'height' in the display text.
-        Parameters:
-        ----------
-        patient_id : str
-            The FHIR ID of the patient whose height history is being requested.
-        Returns:
-        -------
-        list or None:
-            A list of dictionaries containing height measurements sorted by date, or None if the patient data
-            could not be retrieved.
-            Each dictionary contains:
-            - 'date': datetime object representing the observation date
-            - 'value': numeric height value
-            - 'unit': unit of measurement (defaults to 'cm')
-            - 'formatted_date': the date formatted as 'YYYY-MM-DD'
-            - 'display': formatted string combining the value and unit (e.g., "170 cm")
-        Notes:
-        -----
-        The method continues processing even if some observations have invalid or missing data.
-        """
-        height_history = []
-        patient_data = self.get_all_patient_data(patient_id)
-
-        if not patient_data:
-            return None
-
-        for entry in patient_data:
-            if 'resource' not in entry:
-                continue
-
-            resource = entry['resource']
-            if resource['resourceType'] == 'Observation':
-                isHeight = False
-                coding_list = self._get_coding(resource)
-
-                for coding in coding_list:
-                    if coding.get('code') == '8302-2' or 'height' in coding.get('display', '').lower():
-                        isHeight = True
-                        break
-
-                if isHeight == True:
-                    try:
-                        height_value = resource['valueQuantity'].get('value')
-                        height_unit = resource['valueQuantity'].get('unit', 'cm')
-                        date_str = resource['effectiveDateTime']
-                        observation_date = datetime.strptime(date_str, '%Y-%m-%d')
-                        height_history.append({
-                            'date': observation_date,
-                            'value': height_value,
-                            'unit': height_unit,
-                            'formatted_date': observation_date.strftime('%Y-%m-%d'),
-                            'display': f"{height_value} {height_unit}"
-                        })
-                    except (ValueError, KeyError) as e:
-                        continue
-            height_history.sort(key=lambda x: x['date'])
-
-        return height_history
-
+        """Get height history for patient"""
+        return self._get_observation_history(
+            patient_id,
+            {'8302-2': 'Height'},
+            default_unit='cm',
+            name='height'
+        )
+    
     def get_systolic_blood_pressure_history(self, patient_id):
-        """
-        Retrieves the systolic blood pressure history for a specified patient.
-        This method fetches all observations for the patient and filters for systolic blood pressure measurements,
-        identified by LOINC code '8480-6' or by having 'Systolic blood pressure' in the display text.
-        Parameters:
-        ----------
-        patient_id : str
-            The FHIR ID of the patient whose blood pressure history is being requested.
-        Returns:
-        -------
-        list or None:
-            A list of dictionaries containing systolic blood pressure measurements sorted by date, or None if the
-            patient data could not be retrieved.
-            Each dictionary contains:
-            - 'date': datetime object representing the observation date
-            - 'value': numeric systolic blood pressure value
-            - 'unit': unit of measurement (defaults to 'mm[Hg]')
-            - 'formatted_date': the date formatted as 'YYYY-MM-DD'
-            - 'display': formatted string combining the value and unit (e.g., "110 mm[Hg]")
-        Notes:
-        -----
-        The method continues processing even if some observations have invalid or missing data.
-        """
-        systolic_history = []
-        patient_data = self.get_all_patient_data(patient_id)
-
-        if not patient_data:
-            return None
-
-        for entry in patient_data:
-            if 'resource' not in entry:
-                continue
-
-            resource = entry['resource']
-            if resource['resourceType'] == 'Observation':
-                isSystolic = False
-                coding_list = self._get_coding(resource)
-
-                for coding in coding_list:
-                    if coding.get('code') == '8480-6' or 'Systolic blood pressure' in coding.get('display', '').lower():
-                        isSystolic = True
-                        break
-
-                if isSystolic == True:
-                    try:
-                        systolic_value = resource['valueQuantity'].get('value')
-                        systolic_unit = resource['valueQuantity'].get('unit', 'mm[Hg]')
-                        date_str = resource['effectiveDateTime']
-                        observation_date = datetime.strptime(date_str, '%Y-%m-%d')
-                        systolic_history.append({
-                            'date': observation_date,
-                            'value': systolic_value,
-                            'unit': systolic_unit,
-                            'formatted_date': observation_date.strftime('%Y-%m-%d'),
-                            'display': f"{systolic_value} {systolic_unit}"
-                        })
-                    except (ValueError, KeyError) as e:
-                        continue
-            systolic_history.sort(key=lambda x: x['date'])
-
-        return systolic_history
+        """Get systolic blood pressure history for patient"""  
+        return self._get_observation_history(
+            patient_id,
+            {'8480-6': 'Systolic blood pressure'},
+            default_unit='mm[Hg]',
+            name='systolic blood pressure'
+        )
 
     def get_diastolic_blood_pressure_history(self, patient_id):
-        """
-        Retrieves the diastolic blood pressure history for a specified patient.
-        This method fetches all observations for the patient and filters for diastolic blood pressure measurements,
-        identified by LOINC code '8462-4' or by having 'Diastolic blood pressure' in the display text.
-        Parameters:
-        ----------
-        patient_id : str
-            The FHIR ID of the patient whose blood pressure history is being requested.
-        Returns:
-        -------
-        list or None:
-            A list of dictionaries containing blood pressure measurements sorted by date, or None if the patient data
-            could not be retrieved.
-            Each dictionary contains:
-            - 'date': datetime object representing the observation date
-            - 'value': numeric diastolic blood pressure value
-            - 'unit': unit of measurement (defaults to 'mm[Hg]')
-            - 'formatted_date': the date formatted as 'YYYY-MM-DD'
-            - 'display': formatted string combining the value and unit (e.g., "70 mm[Hg]")
-        Notes:
-        -----
-        The method continues processing even if some observations have invalid or missing data.
-        """
-        diastolic_history = []
-        patient_data = self.get_all_patient_data(patient_id)
+        """Get diastolic blood pressure history for patient"""
+        return self._get_observation_history(
+            patient_id,
+            {'8462-4': 'Diastolic blood pressure'},
+            default_unit='mm[Hg]',
+            name='diastolic blood pressure'
+        )
 
-        if not patient_data:
-            return None
-
-        for entry in patient_data:
-            if 'resource' not in entry:
-                continue
-
-            resource = entry['resource']
-            if resource['resourceType'] == 'Observation':
-                isDiastolic = False
-                coding_list = self._get_coding(resource)
-
-                for coding in coding_list:
-                    if coding.get('code') == '8462-4' or 'diastolic blood pressure' in coding.get('display', '').lower():
-                        isDiastolic = True
-                        break
-
-                if isDiastolic == True:
-                    try:
-                        diastolic_value = resource['valueQuantity'].get('value')
-                        diastolic_unit = resource['valueQuantity'].get('unit', 'mm[Hg]')
-                        date_str = resource['effectiveDateTime']
-                        observation_date = datetime.strptime(date_str, '%Y-%m-%d')
-                        diastolic_history.append({
-                            'date': observation_date,
-                            'value': diastolic_value,
-                            'unit': diastolic_unit,
-                            'formatted_date': observation_date.strftime('%Y-%m-%d'),
-                            'display': f"{diastolic_value} {diastolic_unit}"
-                        })
-                    except (ValueError, KeyError) as e:
-                        continue
-            diastolic_history.sort(key=lambda x: x['date'])
-
-        return diastolic_history
 
     def get_glucose_history(self, patient_id):
-        """
-        Retrieves the glucose measurement history for a specified patient.
-        This method fetches all observations for the patient and filters for glucose measurements,
-        identified by specific LOINC codes or by having 'Glucose' in the display text.
-
-        Parameters:
-        ----------
-        patient_id : str
-            The FHIR ID of the patient whose glucose history is being requested.
-
-        Returns:
-        -------
-        list or None:
-            A list of dictionaries containing glucose measurements sorted by date, or None if the patient data
-            could not be retrieved.
-            Each dictionary contains:
-            - 'date': datetime object representing the observation date
-            - 'value': numeric glucose value
-            - 'unit': unit of measurement (defaults to 'mg/dL')
-            - 'measurement': the display name for the glucose measurement
-            - 'formatted_date': the date formatted as 'YYYY-MM-DD'
-            - 'display': formatted string combining the value and unit (e.g., "80 mg/dL")
-
-        Notes:
-        -----
-        The method continues processing even if some observations have invalid or missing data.
-        """
-        glucose_history = []
-        patient_data = self.get_all_patient_data(patient_id)
-
-        if not patient_data:
-            return None
-
-        for entry in patient_data:
-            if 'resource' not in entry:
-                continue
-
-            resource = entry['resource']
-            if resource['resourceType'] == 'Observation':
-                isGlucose = False
-                coding_list = self._get_coding(resource)
-
-                glucose_codes = [
-                    {'code': '2345-7', 'display': 'Glucose SerPl-mCnc'},
-                    {'code': '5792-7', 'display': 'Glucose Ur Strip-mCnc'},
-                    {'code': '2342-4', 'display': 'Glucose CSF-mCnc'},
-                    {'code': '2339-0', 'display': 'Glucose Bld-mCnc'},
-                    {'code': '1558-6', 'display': 'Glucose p fast SerPl-mCnc'}
-                ]
-
-                for coding in coding_list:
-                    for glucose in glucose_codes:
-                        if coding.get('code') == glucose['code'] or 'glucose' in coding.get('display', '').lower():
-                            isGlucose = True
-                            measurement = glucose['display']
-                            break
-                    if isGlucose:
-                        break
-
-                if isGlucose:
-                    try:
-                        glucose_value = resource['valueQuantity'].get('value')
-                        glucose_unit = resource['valueQuantity'].get('unit', 'mg/dL')
-                        date_str = resource['effectiveDateTime']
-                        observation_date = datetime.strptime(date_str, '%Y-%m-%d')
-
-                        glucose_history.append({
-                            'date': observation_date,
-                            'value': glucose_value,
-                            'unit': glucose_unit,
-                            'measurement': measurement,
-                            'formatted_date': observation_date.strftime('%Y-%m-%d'),
-                            'display': f"{glucose_value} {glucose_unit}"
-                        })
-                    except (ValueError, KeyError) as e:
-                        continue
-
-        glucose_history.sort(key=lambda x: x['date'])
-
-        return glucose_history
-
+        """Get glucose history for patient"""
+        glucose_codes = {
+        '2345-7': 'Glucose SerPl-mCnc',
+        '5792-7': 'Glucose Ur Strip-mCnc',
+        '2342-4': 'Glucose CSF-mCnc',
+        '2339-0': 'Glucose Bld-mCnc',
+        '1558-6': 'Glucose p fast SerPl-mCnc'
+        }
+        return self.get_observation_history(
+            patient_id,
+            glucose_codes, 
+            default_unit='mg/dL',
+            name='glucose'
+        )
+    
     def get_cholesterol_history(self, patient_id):
-        """
-        Retrieves the cholesterol history for a specified patient.
-        This method fetches all observations for the patient and filters for cholestelor measurements,
-        identified by LOINC code '2093-3' or by having 'Cholest SerPl-mCnc' in the display text.
-        Parameters:
-        ----------
-        patient_id : str
-            The FHIR ID of the patient whose cholesterol history is being requested.
-        Returns:
-        -------
-        list or None:
-            A list of dictionaries containing cholesterol measurements sorted by date, or None if the patient data
-            could not be retrieved.
-            Each dictionary contains:
-            - 'date': datetime object representing the observation date
-            - 'value': numeric cholesterol value
-            - 'unit': unit of measurement (defaults to 'mg/dL')
-            - 'formatted_date': the date formatted as 'YYYY-MM-DD'
-            - 'display': formatted string combining the value and unit (e.g., "145 mg/dL")
-        Notes:
-        -----
-        The method continues processing even if some observations have invalid or missing data.
-        """
-        cholest_history = []
-        patient_data = self.get_all_patient_data(patient_id)
-
-        if not patient_data:
-            return None
-
-        for entry in patient_data:
-            if 'resource' not in entry:
-                continue
-
-            resource = entry['resource']
-            if resource['resourceType'] == 'Observation':
-                isCholest = False
-                coding_list = self._get_coding(resource)
-
-                for coding in coding_list:
-                    if coding.get('code') == '2093-3' or 'cholest SerPl-mCnc' in coding.get('display', '').lower():
-                        isCholest = True
-                        break
-
-                if isCholest == True:
-                    try:
-                        cholest_value = resource['valueQuantity'].get('value')
-                        cholest_unit = resource['valueQuantity'].get('unit', 'mm[Hg]')
-                        date_str = resource['effectiveDateTime']
-                        observation_date = datetime.strptime(date_str, '%Y-%m-%d')
-                        cholest_history.append({
-                            'date': observation_date,
-                            'value': cholest_value,
-                            'unit': cholest_unit,
-                            'formatted_date': observation_date.strftime('%Y-%m-%d'),
-                            'display': f"{cholest_value} {cholest_unit}"
-                        })
-                    except (ValueError, KeyError) as e:
-                        continue
-            cholest_history.sort(key=lambda x: x['date'])
-
-        return cholest_history
+        """Get cholesterol history for patient"""
+        return self.get_observation_history(
+            patient_id,
+            {'2093-3': 'Cholesterol'}, 
+            default_unit='mg/dL',
+            name='cholest'
+        )
 
     def get_heart_rate_history(self, patient_id):
-        """
-        Retrieves the heart rate history for a specified patient.
-        This method fetches all observations for the patient and filters for heart rate measurements,
-        identified by LOINC code '8867-4' or by having 'heart_rate' in the display text.
-        Parameters:
-        ----------
-        patient_id : str
-            The FHIR ID of the patient whose heart rate history is being requested.
-        Returns:
-        -------
-        list or None:
-            A list of dictionaries containing heart rate measurements sorted by date, or None if the patient data
-            could not be retrieved.
-            Each dictionary contains:
-            - 'date': datetime object representing the observation date
-            - 'value': numeric heart rate value
-            - 'unit': unit of measurement (defaults to '{beats}/min')
-            - 'formatted_date': the date formatted as 'YYYY-MM-DD'
-            - 'display': formatted string combining the value and unit (e.g., "70 {beats}/min")
-        Notes:
-        -----
-        The method continues processing even if some observations have invalid or missing data.
-        """
-        heart_rate_history = []
-        patient_data = self.get_all_patient_data(patient_id)
-
-        if not patient_data:
-            return None
-
-        for entry in patient_data:
-            if 'resource' not in entry:
-                continue
-
-            resource = entry['resource']
-            if resource['resourceType'] == 'Observation':
-                isHeartRate = False
-                coding_list = self._get_coding(resource)
-
-                for coding in coding_list:
-                    if coding.get('code') == '8867-4' or 'heart_rate' in coding.get('display', '').lower():
-                        isHeartRate = True
-                        break
-
-                if isHeartRate == True:
-                    try:
-                        heart_rate_value = resource['valueQuantity'].get('value')
-                        heart_rate_unit = resource['valueQuantity'].get('unit', '{beats}/min')
-                        date_str = resource['effectiveDateTime']
-                        observation_date = datetime.strptime(date_str, '%Y-%m-%d')
-                        heart_rate_history.append({
-                            'date': observation_date,
-                            'value': heart_rate_value,
-                            'unit': heart_rate_unit,
-                            'formatted_date': observation_date.strftime('%Y-%m-%d'),
-                            'display': f"{heart_rate_value} {heart_rate_unit}"
-                        })
-                    except (ValueError, KeyError) as e:
-                        continue
-            heart_rate_history.sort(key=lambda x: x['date'])
-
-        return heart_rate_history
+        """Get heart rate history for patient"""
+        return self.get_observation_history(
+            patient_id,
+            {'8867-4': 'Heart rate'}, 
+            default_unit='{beats}/min',
+            name='heart rate'
+        )
