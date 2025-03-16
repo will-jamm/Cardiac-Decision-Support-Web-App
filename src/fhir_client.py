@@ -188,7 +188,6 @@ class FHIRClient(object):
                         height_unit = resource['valueQuantity'].get('unit', 'cm')
                         date_str = resource['effectiveDateTime']
                         observation_date = datetime.strptime(date_str, '%Y-%m-%d')
-                        print(observation_date)
                         height_history.append({
                             'date': observation_date,
                             'value': height_value,
@@ -252,7 +251,6 @@ class FHIRClient(object):
                         systolic_unit = resource['valueQuantity'].get('unit', 'mm[Hg]')
                         date_str = resource['effectiveDateTime']
                         observation_date = datetime.strptime(date_str, '%Y-%m-%d')
-                        print(observation_date)
                         systolic_history.append({
                             'date': observation_date,
                             'value': systolic_value,
@@ -316,7 +314,6 @@ class FHIRClient(object):
                         diastolic_unit = resource['valueQuantity'].get('unit', 'mm[Hg]')
                         date_str = resource['effectiveDateTime']
                         observation_date = datetime.strptime(date_str, '%Y-%m-%d')
-                        print(observation_date)
                         diastolic_history.append({
                             'date': observation_date,
                             'value': diastolic_value,
@@ -462,7 +459,6 @@ class FHIRClient(object):
                         cholest_unit = resource['valueQuantity'].get('unit', 'mm[Hg]')
                         date_str = resource['effectiveDateTime']
                         observation_date = datetime.strptime(date_str, '%Y-%m-%d')
-                        print(observation_date)
                         cholest_history.append({
                             'date': observation_date,
                             'value': cholest_value,
@@ -526,7 +522,6 @@ class FHIRClient(object):
                         heart_rate_unit = resource['valueQuantity'].get('unit', '{beats}/min')
                         date_str = resource['effectiveDateTime']
                         observation_date = datetime.strptime(date_str, '%Y-%m-%d')
-                        print(observation_date)
                         heart_rate_history.append({
                             'date': observation_date,
                             'value': heart_rate_value,
