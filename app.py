@@ -1,53 +1,107 @@
 from src.fhir_client import FHIRClient
+
 import streamlit as st
+# import streamlit_authenticator as stauth
+
 JSON_DATABASE = 'data/json_database.json'
 fullUrl = "http://tutsgnfhir.com"
 
 class DecisionSupportInterface():
     def __init__(self):
-        self.client = FHIRClient(
-            server_url = fullUrl,
-            json_path = JSON_DATABASE
+        self.client = self.initialize_client()
+
+    def initialize_client(self):
+        return FHIRClient(
+            server_url=fullUrl,
+            json_path=JSON_DATABASE
         )
 
-    def search_patients(self, query):
+    def search_patients(self, query, patient_ids):
+    
         if not query:
-            return self.client.get_all_patient_ids()
+            return None
         
-        results = []  
-        for patient_id in self.client.get_all_patient_ids():
-            demographics = self.client.get_demographics(patient_id)
+        query = query.lower()
+        
+        if not hasattr(self, '_patient_cache') or self._patient_cache is None:
+            # Initialize cache
+            self._patient_cache = {}
+            for patient_id in patient_ids:
+                demographics = self.client.get_demographics(patient_id)
+                if demographics:
+                    self._patient_cache[patient_id] = demographics
+        
+        results = []
+        for patient_id, demographics in self._patient_cache.items():
             if demographics:
                 given, surname, _ = demographics
-                if (query.lower() in f"{given} {surname}".lower() or
-                    query.lower() in patient_id.lower()):
+                full_name = f"{given} {surname}".lower()
+                
+                if query in full_name or query in patient_id.lower():
                     results.append(patient_id)
+                    
         return results
 
+    def display_patient_information(self, demographics, weight, height):
+
+        if len(weight) == 0:
+            latest_weight = "No data"
+        else:
+            latest_weight = weight[-1]['display']
+
+        if len(height) == 0:
+            latest_height = "No data"
+        else:
+            latest_height = height[-1]['display']
+
+        if demographics:
+            given, surname, age = demographics
+            st.write(f"Patient: {given} {surname}")
+            st.write(f"Age: {age}")
+            st.write(f"Height: {latest_height}")
+            st.write(f"Weight: {latest_weight}")
+    
     def dashboard(self):
         st.title("Decision Support Interface")
         st.write("The interface is divided into two main sections: the patient information section and the decision support section.")
         
-        search_col1, search_col2 = st.columns([3, 1])
-        with search_col1:
-            search_query = st.text_input("Search by name or ID", "")
-        with search_col2:
-            st.write("")
-            st.write("")
-            if st.button("Search"):
-                st.session_state.search_results = self.search_patients(search_query)
+        patient_ids = self.client.get_all_patient_ids()
+
+        with st.form(key='search_form'):
+            search_col1, search_col2 = st.columns([3, 1])
+            with search_col1:
+                search_query = st.text_input("Search by name or ID", "")
+            with search_col2:
+                st.write("")
+                st.write("")
+                submit_button = st.form_submit_button("Search")
+            
+            if submit_button:
+                st.session_state.search_results = self.search_patients(search_query, patient_ids)
         
+        
+        patient_demographics = []
+        patient_weight_history = []
+        patient_height_history = []
+
         if 'search_results' in st.session_state:
+        
             filtered_patients = st.session_state.search_results
             if filtered_patients:
                 for patient_id in filtered_patients:
+
                     demographics = self.client.get_demographics(patient_id)
-                    if demographics:
-                        given, surname, age = demographics
-                        st.write(f"Patient: {given} {surname}")
-                        st.write(f"Age: {age}")
+                    weight_history = self.client.get_weight_history(patient_id)
+                    height_history = self.client.get_height_history(patient_id)
+
+                    self.display_patient_information(demographics=demographics, weight=weight_history, height=height_history)
+
+                    patient_demographics.append(demographics)
+                    patient_weight_history.append(weight_history)
+                    patient_height_history.append(height_history)                    
             else:
                 st.warning("No matching patients found")
+
     def main(self):
         self.dashboard()
 
