@@ -129,7 +129,8 @@ class FHIRClient(object):
             Returns an empty list if patient data is not found or no matching observations exist.
         """
         patient_data = self.get_all_patient_data(patient_id)
-
+        observations = []
+        
         if not patient_data:
             return []
         
