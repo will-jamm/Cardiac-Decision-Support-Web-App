@@ -165,7 +165,7 @@ class FHIRClient(object):
             if not is_target_observation:
                 continue
 
-            observations = self._append_observation_data(observations=[], resource=resource, unit=default_unit, name=name)
+            observations = self._append_observation_data(observations, resource=resource, unit=default_unit, name=name)
 
         observations.sort(key=lambda x: x['date'])
         return observations
@@ -216,7 +216,7 @@ class FHIRClient(object):
         '2339-0': 'Glucose Bld-mCnc',
         '1558-6': 'Glucose p fast SerPl-mCnc'
         }
-        return self.get_observation_history(
+        return self._get_observation_history(
             patient_id,
             glucose_codes, 
             default_unit='mg/dL',
@@ -225,7 +225,7 @@ class FHIRClient(object):
     
     def get_cholesterol_history(self, patient_id):
         """Get cholesterol history for patient"""
-        return self.get_observation_history(
+        return self._get_observation_history(
             patient_id,
             {'2093-3': 'Cholesterol'}, 
             default_unit='mg/dL',
@@ -234,7 +234,7 @@ class FHIRClient(object):
 
     def get_heart_rate_history(self, patient_id):
         """Get heart rate history for patient"""
-        return self.get_observation_history(
+        return self._get_observation_history(
             patient_id,
             {'8867-4': 'Heart rate'}, 
             default_unit='{beats}/min',
