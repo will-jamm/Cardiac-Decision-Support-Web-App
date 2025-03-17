@@ -240,3 +240,11 @@ class FHIRClient(object):
             default_unit='{beats}/min',
             name='heart rate'
         )
+    def get_bmi_history(self, patient_id):
+        """Get bmi history for patient"""
+        return self._get_observation_history(
+            patient_id,
+            {'39156-5': 'bmi'},
+            default_unit='kg/m2',
+            name='bmi'
+        )
