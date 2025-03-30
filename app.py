@@ -1,6 +1,6 @@
 from src.fhir_client import FHIRClient
-
 import streamlit as st
+from src import charts
 # import streamlit_authenticator as stauth
 
 JSON_DATABASE = 'data/json_database.json'
@@ -34,7 +34,7 @@ class DecisionSupportInterface():
         results = []
         for patient_id, demographics in self._patient_cache.items():
             if demographics:
-                given, surname, _ = demographics
+                given, surname, _, _ = demographics
                 full_name = f"{given} {surname}".lower()
                 
                 if query in full_name or query in patient_id.lower():
@@ -55,7 +55,7 @@ class DecisionSupportInterface():
             latest_height = height[-1]['display']
 
         if demographics:
-            given, surname, age = demographics
+            given, surname, _, age = demographics
             st.write(f"Patient: {given} {surname}")
             st.write(f"Age: {age}")
             st.write(f"Height: {latest_height}")
@@ -83,6 +83,7 @@ class DecisionSupportInterface():
         patient_demographics = []
         patient_weight_history = []
         patient_height_history = []
+        patient_bmi_history = []
 
         if 'search_results' in st.session_state:
         
@@ -93,12 +94,16 @@ class DecisionSupportInterface():
                     demographics = self.client.get_demographics(patient_id)
                     weight_history = self.client.get_weight_history(patient_id)
                     height_history = self.client.get_height_history(patient_id)
+                    bmi_history = self.client.get_bmi_history(patient_id)
 
                     self.display_patient_information(demographics=demographics, weight=weight_history, height=height_history)
 
                     patient_demographics.append(demographics)
                     patient_weight_history.append(weight_history)
-                    patient_height_history.append(height_history)                    
+                    patient_height_history.append(height_history)
+                    patient_bmi_history.append(bmi_history)
+
+                    charts.plot_weight_height_bmi(weight_history, height_history, bmi_history, demographics, self.client)
             else:
                 st.warning("No matching patients found")
 
