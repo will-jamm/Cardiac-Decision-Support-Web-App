@@ -34,7 +34,7 @@ class DecisionSupportInterface():
         results = []
         for patient_id, demographics in self._patient_cache.items():
             if demographics:
-                given, surname, _, _ = demographics
+                given, surname, _, _, _ = demographics
                 full_name = f"{given} {surname}".lower()
                 
                 if query in full_name or query in patient_id.lower():
@@ -55,7 +55,7 @@ class DecisionSupportInterface():
             latest_height = height[-1]['display']
 
         if demographics:
-            given, surname, _, age = demographics
+            given, surname, _, age, _ = demographics
             st.write(f"Patient: {given} {surname}")
             st.write(f"Age: {age}")
             st.write(f"Height: {latest_height}")
