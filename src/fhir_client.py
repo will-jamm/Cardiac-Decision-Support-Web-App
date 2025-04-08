@@ -41,7 +41,8 @@ class FHIRClient(object):
                 surname = resource_patient['name'][0]['family'][0]
                 birthdate = datetime.strptime(resource_patient['birthDate'], '%Y-%m-%d')
                 age = self._calculate_age(birthdate, date.today())
-                return given, surname, birthdate, age
+                gender = resource_patient['gender']
+                return given, surname, birthdate, age, gender
         return None
 
     def _calculate_age(self, born, reference_date):
