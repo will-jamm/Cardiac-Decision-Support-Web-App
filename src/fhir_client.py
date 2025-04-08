@@ -39,14 +39,14 @@ class FHIRClient(object):
                 resource_patient = patient[0]['resource']
                 given = resource_patient['name'][0]['given'][0]
                 surname = resource_patient['name'][0]['family'][0]
-                born = datetime.strptime(resource_patient['birthDate'], '%Y-%m-%d')
-                age = self._calculate_age(born)
-                return given, surname, age
+                birthdate = datetime.strptime(resource_patient['birthDate'], '%Y-%m-%d')
+                age = self._calculate_age(birthdate, date.today())
+                gender = resource_patient['gender']
+                return given, surname, birthdate, age, gender
         return None
 
-    def _calculate_age(self, born):
-        today = date.today()
-        return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+    def _calculate_age(self, born, reference_date):
+        return reference_date.year - born.year - ((reference_date.month, reference_date.day) < (born.month, born.day))
     
     def get_all_patient_ids(self):
         """Return list of all patient IDs"""
@@ -99,7 +99,7 @@ class FHIRClient(object):
             'date': observation_date,
             'value': value,
             'unit': observation_unit,
-            'formatted_date': observation_date.strftime('%Y-%m-%d'),
+            'formatted_date': observation_date.strftime('%d-%m-%Y'),
             'display': f"{value:.2f} {unit}",
             'name': name
         })
