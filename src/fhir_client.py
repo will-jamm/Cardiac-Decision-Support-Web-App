@@ -247,3 +247,89 @@ class FHIRClient(object):
             default_unit='kg/m2',
             name='bmi'
         )
+
+    def get_latest_total_cholesterol(self, patient_id):
+        """Get the latest total cholesterol value for a patient"""
+        history = self.get_cholesterol_history(patient_id)
+        if history:
+            return history[-1]['value']  # Return the most recent value
+        return None
+
+    def get_latest_hdl_cholesterol(self, patient_id):
+        """Get the latest HDL cholesterol value for a patient"""
+        hdl_codes = {'2085-9': 'HDL Cholesterol'}
+        history = self._get_observation_history(
+            patient_id,
+            hdl_codes,
+            default_unit='mg/dL',
+            name='hdl'
+        )
+        if history:
+            return history[-1]['value']
+        return None
+
+    def get_latest_systolic_bp(self, patient_id):
+        """Get the latest systolic blood pressure value for a patient"""
+        history = self.get_systolic_blood_pressure_history(patient_id)
+        if history:
+            return history[-1]['value']
+        return None
+
+    def is_patient_on_bp_medication(self, patient_id):
+        """
+        Checks if the patient is currently on blood pressure medication.
+        This checks MedicationRequest or Condition resources for hypertension treatment.
+        """
+        patient_data = self.get_all_patient_data(patient_id)
+        if not patient_data:
+            return False
+
+        keywords = ['hypertension', 'high blood pressure']
+        for entry in patient_data:
+            resource = entry.get('resource', {})
+            if resource.get('resourceType') == 'MedicationRequest':
+                med_name = resource.get('medicationCodeableConcept', {}).get('text', '').lower()
+                if any(keyword in med_name for keyword in keywords):
+                    return True
+            elif resource.get('resourceType') == 'Condition':
+                condition = resource.get('code', {}).get('text', '').lower()
+                if any(keyword in condition for keyword in keywords):
+                    return True
+        return False
+
+    def is_patient_smoker(self, patient_id):
+        """
+        Determines if the patient is a smoker by checking Smoking Status observations.
+        """
+        patient_data = self.get_all_patient_data(patient_id)
+        if not patient_data:
+            return False
+
+        for entry in patient_data:
+            resource = entry.get('resource', {})
+            if resource.get('resourceType') == 'Observation':
+                coding_list = self._get_coding(resource)
+                if coding_list:
+                    for coding in coding_list:
+                        if coding.get('code') == '72166-2':  # LOINC code for smoking status
+                            value = resource.get('valueCodeableConcept', {}).get('text', '').lower()
+                            if 'current every day smoker' in value or 'current some day smoker' in value:
+                                return True
+        return False
+
+    def does_patient_have_diabetes(self, patient_id):
+        """
+        Checks if the patient has a condition related to diabetes.
+        """
+        patient_data = self.get_all_patient_data(patient_id)
+        if not patient_data:
+            return False
+
+        for entry in patient_data:
+            resource = entry.get('resource', {})
+            if resource.get('resourceType') == 'Condition':
+                condition_text = resource.get('code', {}).get('text', '').lower()
+                if 'diabetes' in condition_text:
+                    return True
+        return False
+

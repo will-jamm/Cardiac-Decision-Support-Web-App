@@ -1,6 +1,8 @@
 from src.fhir_client import FHIRClient
 import streamlit as st
 from src import charts
+from src.ascvd_risk_calculator import ASCVDRiskCalculator
+
 # import streamlit_authenticator as stauth
 
 JSON_DATABASE = 'data/json_database.json'
@@ -30,7 +32,7 @@ class DecisionSupportInterface():
                 demographics = self.client.get_demographics(patient_id)
                 if demographics:
                     self._patient_cache[patient_id] = demographics
-        
+
         results = []
         for patient_id, demographics in self._patient_cache.items():
             if demographics:
@@ -60,6 +62,39 @@ class DecisionSupportInterface():
             st.write(f"Age: {age}")
             st.write(f"Height: {latest_height}")
             st.write(f"Weight: {latest_weight}")
+
+
+    def display_risk_score(self, demographics, cholesterol_data, systolic_bp, is_treated_bp, is_smoker, has_diabetes):
+        if not cholesterol_data or not systolic_bp or not demographics:
+            st.info("Not enough data to calculate ASCVD risk.")
+            return
+
+        total_chol = cholesterol_data.get("total_cholesterol")
+        hdl_chol = cholesterol_data.get("hdl_cholesterol")
+
+        if not total_chol or not hdl_chol:
+            st.info("Missing cholesterol data for risk calculation.")
+            return
+
+        given, surname, _, age = demographics
+
+        risk_calc = ASCVDRiskCalculator()
+        risk = risk_calc.compute_10_year_risk(
+            age=age,
+            sex='male',  # 🔄 You can improve this later with actual gender data
+            total_cholesterol=total_chol,
+            hdl_cholesterol=hdl_chol,
+            systolic_bp=systolic_bp,
+            isBpTreated=is_treated_bp,
+            isSmoker=is_smoker,
+            hasDiabetes=has_diabetes
+        )
+
+        if isinstance(risk, dict):  # handle validation error
+            st.warning(risk['message'])
+        else:
+            st.success(f"10-Year ASCVD Risk Score: **{risk:.2f}%**")
+
     
     def dashboard(self):
         st.title("Decision Support Interface")
@@ -104,6 +139,24 @@ class DecisionSupportInterface():
                     patient_bmi_history.append(bmi_history)
 
                     charts.plot_weight_height_bmi(weight_history, height_history, bmi_history, demographics, self.client)
+
+                    # Replace dummy inputs with real observation data
+                    total_chol = self.client.get_latest_total_cholesterol(patient_id)
+                    hdl_chol = self.client.get_latest_hdl_cholesterol(patient_id)
+                    systolic_bp = self.client.get_latest_systolic_bp(patient_id)
+
+                    is_treated_bp = self.client.is_patient_on_bp_medication(patient_id)
+                    is_smoker = self.client.is_patient_smoker(patient_id)
+                    has_diabetes = self.client.does_patient_have_diabetes(patient_id)
+
+                    cholesterol_data = {
+                        "total_cholesterol": total_chol,
+                        "hdl_cholesterol": hdl_chol
+                    }
+
+                    self.display_risk_score(demographics, cholesterol_data, systolic_bp, is_treated_bp, is_smoker,
+                                            has_diabetes)
+
             else:
                 st.warning("No matching patients found")
 
