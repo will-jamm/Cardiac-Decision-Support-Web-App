@@ -1,12 +1,14 @@
 import matplotlib.pyplot as plt
+import streamlit
 import streamlit as st
 import csv
 import os
 import matplotlib.lines as mlines
-from datetime import datetime
+import matplotlib.font_manager as fm
+import numpy as np
 
 # Open and read the CSV file. Return dictionary containing the data.
-def load_bmi_data(file_path):
+def load_data(file_path):
     bmi_data = []
     with open(file_path, mode='r') as file:
         reader = csv.DictReader(file, delimiter=';')
@@ -15,12 +17,12 @@ def load_bmi_data(file_path):
     return bmi_data
 
 
-def get_bmi_for_age(bmi_data, age):
+def get_bmi_ranges(data, age):
     # If the age is 19 or older, return the row with age >= 19
     if age >= 19:
-        return bmi_data[-1]  # Get the last row for age >= 19
+        return data[-1]  # Get the last row for age >= 19
     else:
-        for row in bmi_data:
+        for row in data:
             if int(row['age']) == age:
                 return row
 
@@ -32,24 +34,24 @@ def plot_weight_height_bmi(weight_history, height_history, bmi_history, demograp
     weight_dates = []
     weight_values = []
     weight_indices = []
-    weight_data_points = []
+    x_centers_weight = []
 
     height_dates = []
     height_values = []
     height_indices = []
-    height_data_points = []
+    x_centers_height = []
 
     bmi_dates = []
     bmi_values = []
     bmi_indices = []
-    bmi_data_points = []
+    x_centers_bmi = []
 
-
+    # Extract data from database
     if(len(weight_history) >= len(height_history)):
 
         extract_data = lambda history: ([entry['date'] for entry in history],
                                         [float(entry['display'].split()[0]) for entry in history],
-                                        list(range(len(history)))) if history else ([], [], [])
+                                        np.linspace(0, 1, len(history))) if history else ([], [], [])
 
         weight_dates, weight_values, weight_indices = extract_data(weight_history)
         bmi_dates, bmi_values, bmi_indices = extract_data(bmi_history)
@@ -63,19 +65,16 @@ def plot_weight_height_bmi(weight_history, height_history, bmi_history, demograp
                 height_dates.append(date)
                 height_indices.append(index)
                 index += 1
-                height_data_points.append(idx)
-        weight_data_points = weight_indices
-        bmi_data_points = bmi_indices
+        height_indices = np.linspace(0, 1, len(height_indices))
     else:
         extract_data = lambda history: ([entry['date'] for entry in history],
                                         [float(entry['display'].split()[0]) for entry in history],
-                                        list(range(len(history)))) if history else ([], [], [])
+                                        np.linspace(0, 1, len(history))) if history else ([], [], [])
 
         height_dates, height_values, height_indices = extract_data(height_history)
         bmi_dates, bmi_values, bmi_indices = extract_data(bmi_history)
 
         weight_dict = {entry['date']: float(entry['display'].split()[0]) for entry in weight_history}
-        weight_data_points = []
         index = 0
         for idx, height_entry in enumerate(height_history):
             date = height_entry['date']
@@ -84,113 +83,119 @@ def plot_weight_height_bmi(weight_history, height_history, bmi_history, demograp
                 weight_dates.append(date)
                 weight_indices.append(index)
                 index += 1
-                weight_data_points.append(idx)
-        height_data_points = height_indices
 
+    # Load csv files containing the data for bmi ranges
     if gender == "female":
         data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
         female_bmi_path = os.path.join(data_dir, 'female_bmi.csv')
-        bmi_ranges_data = load_bmi_data(female_bmi_path)
+        bmi_ranges_data = load_data(female_bmi_path)
     else:
         data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
         female_bmi_path = os.path.join(data_dir, 'female_bmi.csv')
-        bmi_ranges_data = load_bmi_data(female_bmi_path)
+        bmi_ranges_data = load_data(female_bmi_path)
 
+    # Calculate BMI if it is not in the database and weight and height are
     if not bmi_history and weight_history and height_history:
-        bmi_data_points = []
-        bmi_indices = list(range(len(weight_history)))
+        weight_dict = {entry['date']: float(entry['display'].split()[0]) for entry in weight_history}
         height_dict = {entry['date']: float(entry['display'].split()[0]) for entry in height_history}
 
-        for idx, weight_entry in enumerate(weight_history):
-            date = weight_entry['date']
-            if date in height_dict:
-                weight = float(weight_entry['display'].split()[0])
-                height = height_dict[date]
-                bmi = weight / ((height / 100) ** 2)
-                bmi_values.append(bmi)
-                bmi_dates.append(date)
-                bmi_data_points.append(idx)
+        # Find common dates between weight and height histories
+        common_dates = sorted(set(weight_dict.keys()) & set(height_dict.keys()))
+
+        for date in common_dates:
+            weight = weight_dict[date]
+            height = height_dict[date]
+            bmi = weight / ((height / 100) ** 2)  # BMI formula
+            bmi_values.append(bmi)
+            bmi_dates.append(date)
+
+        bmi_indices = np.linspace(0, 1, len(bmi_values)) # Normalize
 
     if weight_dates or height_dates or bmi_dates:
         fig, ax1 = plt.subplots(figsize=(10, 5))
-        ax2 = ax1.twinx()
-        ax2.plot(bmi_data_points, bmi_values, 'o-', color='black', markerfacecolor='white', linewidth=1.5, label="BMI", markersize=8, markeredgewidth=2)
+
+        # Compute x-coordinates for weight data points
+        for i in range(len(weight_indices)):
+            x_start = weight_indices[i]
+            x_end = weight_indices[i] + 1 / len(weight_indices) if i == len(weight_indices) - 1 else weight_indices[
+                i + 1]
+            x_center = (x_start + x_end) / 2
+            x_centers_weight.append(x_center)
+
+        # Align height data points with corresponding weight dates
+        for i in range(len(height_dates)):
+            for j in range(len(weight_dates)):
+                if(weight_dates[j] == height_dates[i]):
+                    x_centers_height.append(x_centers_weight[j])
+
+        # Align BMI data points with corresponding weight dates
+        for i in range(len(bmi_dates)):
+            for j in range(len(weight_dates)):
+                if (weight_dates[j] == bmi_dates[i]):
+                    x_centers_bmi.append(x_centers_weight[j])
+
+        # Plot height and weight data
+        ax1.plot(x_centers_weight, weight_values, 'o-', linewidth=1.5, color='#1F5E61', label="Weight")
+        ax1.plot(x_centers_height, height_values, 'o-', linewidth=1.5, color='#004C99', label="Height")
 
         # Add background color for BMI ranges
-        for i in range(len(bmi_indices) - 1):
+        for i in range(len(bmi_dates)):
             x_start = bmi_indices[i]
-            x_end = bmi_indices[i + 1]
-            if(x_end < len(bmi_dates)):
-                date = bmi_dates[x_end]
-                age_at_date = client._calculate_age(birthdate, date)
+            x_end = bmi_indices[i] + 1 / len(bmi_indices) if i == len(bmi_indices) - 1 else bmi_indices[i + 1]
+            date = bmi_dates[i]
+            age_at_date = client._calculate_age(birthdate, date)
 
-                # Retrieve BMI ranges for the provided age
-                bmi_row = get_bmi_for_age(bmi_ranges_data, age_at_date)
-                normal_scaled = (210 / 50) * float(bmi_row['normal'])
-                overweight_scaled = (210 / 50) * float(bmi_row['overweight'])
-                obese_scaled = (210 / 50) * float(bmi_row['obese'])
+            # Retrieve BMI ranges for the provided age
+            bmi_row = get_bmi_ranges(bmi_ranges_data, age_at_date)
+            normal_scaled = (210 / 50) * float(bmi_row['normal'])
+            overweight_scaled = (210 / 50) * float(bmi_row['overweight'])
+            obese_scaled = (210 / 50) * float(bmi_row['obese'])
 
-                normal = float(bmi_row['normal'])
-                overweight = float(bmi_row['overweight'])
-                obese = float(bmi_row['obese'])
-                xmin = x_start / (len(bmi_data_points)-2)
-                xmax = x_end / (len(bmi_data_points)-2)
+            # Plot the background colors
+            ax1.fill([x_start, x_start, x_end, x_end], [0, normal_scaled, normal_scaled, 0], color='#DAE8FC',
+                    alpha=0.7)  # underweight
+            ax1.fill([x_start, x_start, x_end, x_end], [normal_scaled, overweight_scaled, overweight_scaled,
+                    normal_scaled], color='#D5E8D4', alpha=0.7)  # normal
+            ax1.fill([x_start, x_start, x_end, x_end], [overweight_scaled, obese_scaled, obese_scaled,
+                     overweight_scaled], color='#FFF2CC', alpha=0.7)  # overweight
+            ax1.fill([x_start, x_start, x_end, x_end], [obese_scaled, 210, 210, obese_scaled],
+                     color='#F8CECC', alpha=0.7)  # obese
 
-                for (start, end, color) in [
-                    (0, normal_scaled, '#DAE8FC'),
-                    (normal_scaled, overweight_scaled, '#D5E8D4'),
-                    (overweight_scaled, obese_scaled, '#FFF2CC'),
-                    (obese_scaled, 210, '#F8CECC')
-                ]:
-                    ax1.axhspan(start, end, xmin=xmin, xmax=xmax, color=color, alpha=0.7)
-                if i < len(bmi_data_points) - 1:
-                    current_bmi_index = bmi_data_points[i]
-                else:
-                    current_bmi_index = None
+        # Plot the connecting line for BMI datapoints
+        ax2 = ax1.twinx()
+        ax2.plot(x_centers_bmi, bmi_values, '-', linewidth=1.5, color='black', label="BMI")
 
-                if current_bmi_index is not None:
-                    if bmi_values[x_start] < normal:
-                        markeredgecolor = '#0000FF'  # Underweight
-                    elif normal <= bmi_values[x_start] < overweight:
-                        markeredgecolor = '#00CC00'  # Normal
-                    elif overweight <= bmi_values[x_start] < obese:
-                        markeredgecolor = '#FF8000'  # Overweight
-                    else:
-                        markeredgecolor = '#FF0000'  # Obese
+        for i in range(len(x_centers_bmi)):
+            x_center = x_centers_bmi[i]
+            bmi_data_point = bmi_values[i]
 
-                    # Plot the BMI points
-                    ax2.plot(current_bmi_index, bmi_values[x_start], 'o', color='black', markeredgecolor=markeredgecolor,
-                             markerfacecolor='white', markersize=8, markeredgewidth=2)
+            date = bmi_dates[i]
+            age_at_date = client._calculate_age(birthdate, date)
 
-            last_bmi_index = bmi_data_points[-1]
-            last_bmi = bmi_values[len(bmi_values) - 1]
-            age_at_last_bmi = client._calculate_age(birthdate, weight_history[len(bmi_values) - 1]['date'])
-            bmi_row = get_bmi_for_age(bmi_ranges_data, age_at_last_bmi)
-            normal_scaled = float(bmi_row['normal'])
-            overweight_scaled = float(bmi_row['overweight'])
-            obese_scaled = float(bmi_row['obese'])
+            # Retrieve BMI ranges for the provided age
+            bmi_row = get_bmi_ranges(bmi_ranges_data, age_at_date)
+            normal = float(bmi_row['normal'])
+            overweight = float(bmi_row['overweight'])
+            obese = float(bmi_row['obese'])
 
-            if last_bmi < normal_scaled:
-                markeredgecolor = '#0000FF'  # Underweight
-            elif normal_scaled <= last_bmi < overweight_scaled:
-                markeredgecolor = '#00CC00'  # Normal
-            elif overweight_scaled <= last_bmi < obese_scaled:
-                markeredgecolor = '#FF8000'  # Overweight
+            # Plot individual bmi data points with corresponding color coding
+            if bmi_data_point < normal:
+                markeredgecolor = 'blue'  # Underweight
+            elif normal <= bmi_data_point < overweight:
+                markeredgecolor = 'green'  # Normal
+            elif overweight <= bmi_data_point < obese:
+                markeredgecolor = 'orange'  # Overweight
             else:
-                markeredgecolor = '#FF0000'  # Obese
+                markeredgecolor = 'red'  # Obese,
 
-            ax2.plot(last_bmi_index, last_bmi, 'o', markeredgecolor=markeredgecolor,
-                     markerfacecolor='white', markersize=8, markeredgewidth=2)
+            ax2.plot(x_center, bmi_data_point, 'o', markeredgecolor=markeredgecolor, markerfacecolor='white',
+                markersize=8, markeredgewidth=2)
 
-        if weight_history:
-            ax1.plot(weight_data_points, weight_values, 'o-', linewidth=1.5, color='#1F5E61', label="Weight")
-        if height_history:
-            ax1.plot(height_data_points, height_values, 'o-', linewidth=1.5, color='#004C99', label="Height")
-
+        # Customize labels
         legend_elements = [
             mlines.Line2D([], [], color='#004C99', linewidth=1.5, marker='o', label='Height'),
-            mlines.Line2D([], [], color='black', marker='o',
-                          markerfacecolor='white', markersize=8, markeredgewidth=2, label='BMI'),
+            mlines.Line2D([], [], color='black', marker='o', markerfacecolor='white', markersize=8,
+                          markeredgewidth=2, label='BMI'),
             mlines.Line2D([], [], color='#1F5E61', linewidth=1.5, marker='o', label='Weight'),
             mlines.Line2D([], [], color='black', markeredgecolor='#0000FF', marker='o',
                           markerfacecolor='white', markersize=8, markeredgewidth=2, label='Underweight'),
@@ -206,20 +211,132 @@ def plot_weight_height_bmi(weight_history, height_history, bmi_history, demograp
             mlines.Line2D([], [], color='#F8CECC', linewidth=10, label='Obese (Background)')
         ]
 
-        ax1.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(1.1, 1))
+        font_properties = fm.FontProperties(size=12)
+        ax1.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(1.1, 1), prop=font_properties)
 
         all_dates = sorted(set(weight_dates + height_dates + bmi_dates))
-        ax1.set_xticks(range(len(all_dates)))
-        ax1.set_xticklabels([date.strftime('%d-%m-%Y') for date in all_dates], rotation=45, ha='right')
+        ax1.set_xticks(x_centers_weight)
+        ax1.set_xticklabels([date.strftime('%d-%m-%Y') for date in all_dates], rotation=45, ha='right', fontsize=9)
 
-        ax1.set_ylabel("Weight (kg) & Height (cm)")
+        ax1.set_ylabel("Weight (kg) & Height (cm)", fontsize=12)
         ax1.set_ylim(0, 210)
         ax1.grid(True, axis='x', linestyle='--', alpha=0.6)
-        ax2.set_ylabel(r"BMI (kg/m$^2$)")
+        ax2.set_ylabel(r"BMI (kg/m$^2$)", fontsize=12)
         ax2.set_ylim(0, 50)
         ax2.set_yticks(range(0, 55, 5))
 
-        ax1.set_title("Weight, Height & BMI")
+        ax1.set_title("Weight, Height & BMI", fontsize=16, fontweight='bold')
         st.pyplot(fig)
     else:
         st.warning("No weight, height, or BMI data available")
+
+def get_glucose_ranges(data, measurement):
+    for row in data:
+        if (row['measurement']) == measurement:
+            return row
+
+def plot_blood_glucose_level(glucose_history, client):
+    if not glucose_history:
+        st.warning("No blood glucose data available")
+        return
+
+    # Extract dates and glucose values
+    dates = [entry['date'] for entry in glucose_history]
+    glucose_values = [float(entry['display'].split()[0]) for entry in glucose_history]
+    indices = np.linspace(0, 1, len(glucose_history))  # Normalize
+
+    ymin = min(min(glucose_values) - 50, 0)
+    ymax = max(max(glucose_values) + 50, 400)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    # List to store x_center and glucose_values to plot the line later
+    x_centers = []
+    y_values = []
+
+    # Load glucose range data from CSV
+    data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
+    file_path = os.path.join(data_dir, 'glucose_ranges.csv')
+    glucose_ranges_data = load_data(file_path)
+
+    for i in range(len(indices)):
+        x_start = indices[i]
+        x_end = indices[i] + 1 / len(indices) if i == len(indices) - 1 else indices[i + 1]
+
+        x_center = (x_start + x_end) / 2 # Calculate the midpoint of the background section
+
+        # Retrieve glucose ranges for the provided measurement
+        measurement = glucose_history[i]['measurement']
+        row = get_glucose_ranges(glucose_ranges_data, measurement)
+
+        # Determine the prediabetes and diabetes thresholds
+        prediabetes = float(row['prediabetes'])
+        diabetes = float(row['diabetes'])
+        # Plot the background colors
+        ax.fill([x_start, x_start, x_end, x_end], [ymin, prediabetes, prediabetes, ymin], color='#D5E8D4',
+                alpha=0.7)  # Normal
+        ax.fill([x_start, x_start, x_end, x_end], [prediabetes, diabetes, diabetes, prediabetes], color='#FFF2CC',
+                alpha=0.7)  # Prediabetic
+        ax.fill([x_start, x_start, x_end, x_end], [diabetes, ymax, ymax, diabetes], color='#F8CECC',
+                alpha=0.7)  # Diabetic
+
+        # Store x_center and glucose value for later plotting
+        x_centers.append(x_center)
+        glucose_value = glucose_values[i]
+        y_values.append(glucose_value)
+
+    # Plot the blood glucose datapoints
+    ax.plot(x_centers, y_values, '-', linewidth=1.5, color='black', label="Blood Glucose Level")
+
+    for i in range(len(indices)):
+        x_center = x_centers[i]
+        glucose_value = glucose_values[i]
+        measurement = glucose_history[i]['measurement']
+        row = get_glucose_ranges(glucose_ranges_data, measurement)
+
+        # Determine the prediabetes and diabetes thresholds
+        prediabetes = float(row['prediabetes'])
+        diabetes = float(row['diabetes'])
+
+        # Assign marker colors based on glucose level category
+        if glucose_value < prediabetes:
+            markeredgecolor = 'green'  # Normal
+        elif prediabetes <= glucose_value < diabetes:
+            markeredgecolor = 'orange'  # Prediabetes
+        else:
+            markeredgecolor = 'red'  # Diabetes
+
+        # Plot individual glucose data points with corresponding color coding
+        ax.plot(x_center, glucose_value, 'o', markeredgecolor=markeredgecolor, markerfacecolor='white',
+                markersize=8, markeredgewidth=2, label=measurement)
+
+    # Customize legend
+    legend_elements = [
+        mlines.Line2D([], [], color='black', marker='o', markerfacecolor='white', markersize=8,
+                      markeredgewidth=2, label='Blood Glucose Level'),
+        mlines.Line2D([], [], color='black', markeredgecolor='green', marker='o',
+                      markerfacecolor='white', markersize=8, markeredgewidth=2, label='Normal'),
+        mlines.Line2D([], [], color='#D5E8D4', linewidth=10, label='Normal (Background)'),
+        mlines.Line2D([], [], color='black', markeredgecolor='orange', marker='o',
+                      markerfacecolor='white', markersize=8, markeredgewidth=2, label='Prediabetic'),
+        mlines.Line2D([], [], color='#FFF2CC', linewidth=10, label='Prediabetic (Background)'),
+        mlines.Line2D([], [], color='black', markeredgecolor='red', marker='o',
+                      markerfacecolor='white', markersize=8, markeredgewidth=2, label='Diabetic'),
+        mlines.Line2D([], [], color='#F8CECC', linewidth=10, label='Diabetic (Background)')
+    ]
+
+    font_properties = fm.FontProperties(size=12)
+    ax.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(1.1, 1), prop=font_properties)
+    ax.set_xticks(x_centers)
+    if (len(glucose_history) > 40):
+        rotation = 90
+    else:
+        rotation = 45
+    ax.set_xticklabels([date.strftime('%d-%m-%Y') for date in dates], rotation=rotation, ha='right', fontsize=9)
+
+    ax.set_ylabel("Blood Glucose Level (mg/dL)", fontsize=12)
+    ax.set_ylim(ymin, ymax)
+    ax.grid(True, axis='x', linestyle='--', alpha=0.6)
+    ax.set_title("Blood Glucose Levels", fontsize=16, fontweight='bold')
+
+    st.pyplot(fig)
