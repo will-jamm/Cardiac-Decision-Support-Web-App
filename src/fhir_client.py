@@ -108,7 +108,6 @@ class FHIRClient(object):
         })
         return observations
         
-        
     def _get_observation_history(self, patient_id, observation_codes, default_unit='', name=''):
         """
         Retrieves observation history for a patient with the specified observation codes.
@@ -225,12 +224,20 @@ class FHIRClient(object):
         )
     
     def get_cholesterol_history(self, patient_id):
-        """Get cholesterol history for patient"""
+        """Get the total cholesterol history for patient"""
         return self._get_observation_history(
             patient_id,
-            {'2093-3': 'Cholesterol'}, 
+            {'2093-3': 'Cholest SerPl-mCnc'}, 
             default_unit='mg/dL',
-            name='cholest'
+            name='total cholest'
+        )
+    def get_hdl_cholesterol_history(self, patient_id):
+        """Get the HDL cholesterol history for patient"""
+        return self._get_observation_history(
+            patient_id,
+            {'2085-9': 'HDLc SerPl-mCnc'}, 
+            default_unit='mg/dL',
+            name='hdl cholest'
         )
 
     def get_heart_rate_history(self, patient_id):
@@ -241,6 +248,7 @@ class FHIRClient(object):
             default_unit='{beats}/min',
             name='heart rate'
         )
+    
     def get_bmi_history(self, patient_id):
         """Get bmi history for patient"""
         return self._get_observation_history(
