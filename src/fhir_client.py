@@ -73,6 +73,7 @@ class FHIRClient(object):
         if 'code' in resource and 'coding' in resource['code']:
             return resource['code']['coding']
         return None
+
     def _append_observation_data(self, observations, resource, unit, name):
         """
         Append FHIR observation data to a list of observations.
@@ -95,13 +96,15 @@ class FHIRClient(object):
         observation_unit = resource['valueQuantity'].get('unit', unit)
         date_str = resource['effectiveDateTime']
         observation_date = datetime.strptime(date_str, '%Y-%m-%d')
+        measurement = resource['code']['coding'][0].get('display')
         observations.append({
             'date': observation_date,
             'value': value,
             'unit': observation_unit,
             'formatted_date': observation_date.strftime('%d-%m-%Y'),
             'display': f"{value:.2f} {unit}",
-            'name': name
+            'name': name,
+            'measurement': measurement
         })
         return observations
         
@@ -166,7 +169,6 @@ class FHIRClient(object):
                 continue
 
             observations = self._append_observation_data(observations, resource=resource, unit=default_unit, name=name)
-
         observations.sort(key=lambda x: x['date'])
         return observations
     
@@ -205,7 +207,6 @@ class FHIRClient(object):
             default_unit='mm[Hg]',
             name='diastolic blood pressure'
         )
-
 
     def get_glucose_history(self, patient_id):
         """Get glucose history for patient"""
