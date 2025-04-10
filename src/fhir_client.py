@@ -89,7 +89,7 @@ class FHIRClient(object):
         Note:
             The resource is expected to contain 'valueQuantity' and 'effectiveDateTime' fields.
             The formatted observation includes the date, value, unit, a formatted date string,
-            a display string, and the observation name.
+            a display string, the observation name, and the measurement.
         """
         
         value = resource['valueQuantity'].get('value')
