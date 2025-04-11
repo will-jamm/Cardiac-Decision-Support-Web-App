@@ -16,7 +16,7 @@ class ASCVDRiskCalculator:
                     'current_smoker': 7.837,
                     'ln_age_smoker': -1.795,
                     'diabetes': 0.658,
-                    'baseline_survival': 0.8954,
+                    'baseline_survival': 0.9144,
                     'mean_term': 61.18
                 },
                 'female': {
@@ -49,6 +49,7 @@ class ASCVDRiskCalculator:
         ln_total_chol = np.log(total_cholesterol)
         ln_hdl = np.log(hdl_cholesterol)
         ln_sbp = np.log(systolic_bp)
+        print(ln_age)
 
         sum_terms = 0
 
@@ -63,7 +64,7 @@ class ASCVDRiskCalculator:
 
         # Blood pressure terms
         if isBpTreated:
-            sum_terms += coef['ln_hdl'] * ln_sbp
+            sum_terms += coef['ln_treated_systolic_bp'] * ln_sbp
 
         else:
             sum_terms += coef['ln_untreated_systolic_bp'] * ln_sbp
@@ -77,8 +78,9 @@ class ASCVDRiskCalculator:
 
         print(sum_terms)
         risk = 1 - np.power(coef['baseline_survival'], np.exp(sum_terms - coef['mean_term']))
+        
         risk_percent = risk * 100
-
+        print(risk_percent)
         return risk_percent
 
     def _validate_inputs(self, age, sex, total_cholesterol, hdl_cholesterol, systolic_bp):
@@ -128,3 +130,30 @@ class ASCVDRiskCalculator:
         
         else:
             return 'High'
+        
+def main():
+    caclulator = ASCVDRiskCalculator()
+
+    test_patient = {
+        'age': 55,
+        'sex': 'male',
+        'total_cholesterol': 213,
+        'hdl_cholesterol': 50,
+        'systolic_bp': 120,
+        'isBpTreated': False,
+        'isSmoker': False,
+        'hasDiabetes': False
+}
+    risk = caclulator.compute_10_year_risk(
+            age=test_patient['age'],
+            sex=test_patient['sex'],
+            total_cholesterol=test_patient['total_cholesterol'],
+            hdl_cholesterol=test_patient['hdl_cholesterol'],
+            systolic_bp=test_patient['systolic_bp'],
+            isBpTreated=test_patient['isBpTreated'],
+            isSmoker=test_patient['isSmoker'],
+            hasDiabetes=test_patient['hasDiabetes']
+    )
+
+if __name__ == "__main__":
+    main()

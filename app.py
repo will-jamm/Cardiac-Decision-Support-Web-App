@@ -119,6 +119,7 @@ class DecisionSupportInterface():
         patient_weight_history = []
         patient_height_history = []
         patient_bmi_history = []
+        patient_glucose_history = []
 
         if 'search_results' in st.session_state:
         
@@ -130,6 +131,8 @@ class DecisionSupportInterface():
                     weight_history = self.client.get_weight_history(patient_id)
                     height_history = self.client.get_height_history(patient_id)
                     bmi_history = self.client.get_bmi_history(patient_id)
+                    glucose_history = self.client.get_glucose_history(patient_id)
+
 
                     self.display_patient_information(demographics=demographics, weight=weight_history, height=height_history)
 
@@ -137,8 +140,10 @@ class DecisionSupportInterface():
                     patient_weight_history.append(weight_history)
                     patient_height_history.append(height_history)
                     patient_bmi_history.append(bmi_history)
+                    patient_glucose_history.append(glucose_history)
 
                     charts.plot_weight_height_bmi(weight_history, height_history, bmi_history, demographics, self.client)
+<<<<<<< HEAD
 
                     # Replace dummy inputs with real observation data
                     total_chol = self.client.get_latest_total_cholesterol(patient_id)
@@ -157,6 +162,9 @@ class DecisionSupportInterface():
                     self.display_risk_score(demographics, cholesterol_data, systolic_bp, is_treated_bp, is_smoker,
                                             has_diabetes)
 
+=======
+                    charts.plot_blood_glucose_level(glucose_history, self.client)
+>>>>>>> adad86d3c27bf2b1a69947d54fd6fd87530c553e
             else:
                 st.warning("No matching patients found")
 

@@ -73,6 +73,7 @@ class FHIRClient(object):
         if 'code' in resource and 'coding' in resource['code']:
             return resource['code']['coding']
         return None
+
     def _append_observation_data(self, observations, resource, unit, name):
         """
         Append FHIR observation data to a list of observations.
@@ -88,23 +89,24 @@ class FHIRClient(object):
         Note:
             The resource is expected to contain 'valueQuantity' and 'effectiveDateTime' fields.
             The formatted observation includes the date, value, unit, a formatted date string,
-            a display string, and the observation name.
+            a display string, the observation name, and the measurement.
         """
         
         value = resource['valueQuantity'].get('value')
         observation_unit = resource['valueQuantity'].get('unit', unit)
         date_str = resource['effectiveDateTime']
         observation_date = datetime.strptime(date_str, '%Y-%m-%d')
+        measurement = resource['code']['coding'][0].get('display')
         observations.append({
             'date': observation_date,
             'value': value,
             'unit': observation_unit,
             'formatted_date': observation_date.strftime('%d-%m-%Y'),
             'display': f"{value:.2f} {unit}",
-            'name': name
+            'name': name,
+            'measurement': measurement
         })
         return observations
-        
         
     def _get_observation_history(self, patient_id, observation_codes, default_unit='', name=''):
         """
@@ -166,7 +168,6 @@ class FHIRClient(object):
                 continue
 
             observations = self._append_observation_data(observations, resource=resource, unit=default_unit, name=name)
-
         observations.sort(key=lambda x: x['date'])
         return observations
     
@@ -206,7 +207,6 @@ class FHIRClient(object):
             name='diastolic blood pressure'
         )
 
-
     def get_glucose_history(self, patient_id):
         """Get glucose history for patient"""
         glucose_codes = {
@@ -224,12 +224,20 @@ class FHIRClient(object):
         )
     
     def get_cholesterol_history(self, patient_id):
-        """Get cholesterol history for patient"""
+        """Get the total cholesterol history for patient"""
         return self._get_observation_history(
             patient_id,
-            {'2093-3': 'Cholesterol'}, 
+            {'2093-3': 'Cholest SerPl-mCnc'}, 
             default_unit='mg/dL',
-            name='cholest'
+            name='total cholest'
+        )
+    def get_hdl_cholesterol_history(self, patient_id):
+        """Get the HDL cholesterol history for patient"""
+        return self._get_observation_history(
+            patient_id,
+            {'2085-9': 'HDLc SerPl-mCnc'}, 
+            default_unit='mg/dL',
+            name='hdl cholest'
         )
 
     def get_heart_rate_history(self, patient_id):
@@ -240,6 +248,7 @@ class FHIRClient(object):
             default_unit='{beats}/min',
             name='heart rate'
         )
+    
     def get_bmi_history(self, patient_id):
         """Get bmi history for patient"""
         return self._get_observation_history(
