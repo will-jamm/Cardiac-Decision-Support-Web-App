@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import math
 
 class ASCVDRiskCalculator:
 
@@ -21,6 +22,7 @@ class ASCVDRiskCalculator:
                 },
                 'female': {
                     'ln_age': -29.799,
+                    'ln_age_squared': 4.884,
                     'ln_total_chol': 13.540,
                     'ln_age_total_chol': -3.114,
                     'ln_hdl': -13.578,
@@ -45,41 +47,44 @@ class ASCVDRiskCalculator:
         
         coef = self.coefficients[sex]
 
+        baseline_survival = coef['baseline_survival']
+        mean_term = coef['mean_term']
+        predict = 0
+
         ln_age = np.log(age)
         ln_total_chol = np.log(total_cholesterol)
         ln_hdl = np.log(hdl_cholesterol)
-        ln_sbp = np.log(systolic_bp)
-        print(ln_age)
+        age_hdl = ln_age * ln_hdl
+        age_smoker = ln_age if isSmoker else 0
+        age_total_chol = ln_age * ln_total_chol
+        ln_treated_sbp = np.log(systolic_bp) if isBpTreated else 0
+        ln_untreated_sbp = 0 if isBpTreated else np.log(systolic_bp)
 
-        sum_terms = 0
+        predict += coef['ln_age'] * ln_age
 
-        # Age and cholesterol terms
-        sum_terms += coef['ln_age'] * ln_age
-        sum_terms += coef['ln_total_chol'] * ln_total_chol
-        sum_terms += coef['ln_age_total_chol'] * ln_age * ln_total_chol
-    
-        # HDL terms
-        sum_terms += coef['ln_hdl'] * ln_hdl
-        sum_terms += coef['ln_age_hdl'] * ln_age * ln_hdl
+        if sex.lower() == "female":
+            predict += coef['ln_age_squared'] * (ln_age ** 2)
 
-        # Blood pressure terms
-        if isBpTreated:
-            sum_terms += coef['ln_treated_systolic_bp'] * ln_sbp
+        predict += coef['ln_total_chol'] * ln_total_chol
+        predict += coef['ln_age_total_chol'] * age_total_chol
 
-        else:
-            sum_terms += coef['ln_untreated_systolic_bp'] * ln_sbp
+        predict += coef['ln_hdl'] * ln_hdl
+        predict += coef['ln_age_hdl'] * age_hdl
 
-        if isSmoker:
-            sum_terms += coef['current_smoker']
-            sum_terms += coef['ln_age_smoker'] * ln_age
+        predict += coef['ln_treated_systolic_bp'] * ln_treated_sbp
+        predict += coef['ln_untreated_systolic_bp'] * ln_untreated_sbp
 
-        if hasDiabetes:
-            sum_terms += coef['diabetes']
+        predict += coef['current_smoker'] * int(isSmoker)
+        predict += coef['ln_age_smoker'] * age_smoker
 
-        print(sum_terms)
-        risk = 1 - np.power(coef['baseline_survival'], np.exp(sum_terms - coef['mean_term']))
-        
-        risk_percent = risk * 100
+        predict += coef['diabetes'] * int(hasDiabetes)
+            
+        print(coef['baseline_survival'])  
+        print(predict)
+
+        risk_percent = (1 - (baseline_survival ** np.exp(predict - mean_term))) * 100
+            
+        print("Risk score:")
         print(risk_percent)
         return risk_percent
 
@@ -132,9 +137,9 @@ class ASCVDRiskCalculator:
             return 'High'
         
 def main():
-    caclulator = ASCVDRiskCalculator()
+    calculator = ASCVDRiskCalculator()
 
-    test_patient = {
+    test_patient1 = {
         'age': 55,
         'sex': 'male',
         'total_cholesterol': 213,
@@ -143,16 +148,26 @@ def main():
         'isBpTreated': False,
         'isSmoker': False,
         'hasDiabetes': False
+    }
+    test_patient2 = {
+        'age': 55,
+        'sex': 'female',
+        'total_cholesterol': 213,
+        'hdl_cholesterol': 50,
+        'systolic_bp': 120,
+        'isBpTreated': False,
+        'isSmoker': False,
+        'hasDiabetes': False
 }
-    risk = caclulator.compute_10_year_risk(
-            age=test_patient['age'],
-            sex=test_patient['sex'],
-            total_cholesterol=test_patient['total_cholesterol'],
-            hdl_cholesterol=test_patient['hdl_cholesterol'],
-            systolic_bp=test_patient['systolic_bp'],
-            isBpTreated=test_patient['isBpTreated'],
-            isSmoker=test_patient['isSmoker'],
-            hasDiabetes=test_patient['hasDiabetes']
+    risk = calculator.compute_10_year_risk(
+            age=test_patient2['age'],
+            sex=test_patient2['sex'],
+            total_cholesterol=test_patient2['total_cholesterol'],
+            hdl_cholesterol=test_patient2['hdl_cholesterol'],
+            systolic_bp=test_patient2['systolic_bp'],
+            isBpTreated=test_patient2['isBpTreated'],
+            isSmoker=test_patient2['isSmoker'],
+            hasDiabetes=test_patient2['hasDiabetes']
     )
 
 if __name__ == "__main__":
