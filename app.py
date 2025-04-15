@@ -5,6 +5,8 @@ from src.ascvd_risk_calculator import ASCVDRiskCalculator
 
 # import streamlit_authenticator as stauth
 
+st.set_page_config(layout="wide")
+
 JSON_DATABASE = 'data/json_database.json'
 fullUrl = "http://tutsgnfhir.com"
 
@@ -76,7 +78,7 @@ class DecisionSupportInterface():
             st.info("Missing cholesterol data for risk calculation.")
             return
 
-        given, surname, _, age = demographics
+        given, surname, _, age, _ = demographics
 
         risk_calc = ASCVDRiskCalculator()
         risk = risk_calc.compute_10_year_risk(
@@ -113,13 +115,6 @@ class DecisionSupportInterface():
             
             if submit_button:
                 st.session_state.search_results = self.search_patients(search_query, patient_ids)
-        
-        
-        patient_demographics = []
-        patient_weight_history = []
-        patient_height_history = []
-        patient_bmi_history = []
-        patient_glucose_history = []
 
         if 'search_results' in st.session_state:
         
@@ -132,18 +127,26 @@ class DecisionSupportInterface():
                     height_history = self.client.get_height_history(patient_id)
                     bmi_history = self.client.get_bmi_history(patient_id)
                     glucose_history = self.client.get_glucose_history(patient_id)
-
+                    systolic_bp_history = self.client.get_systolic_blood_pressure_history(patient_id)
+                    diastolic_bp_history = self.client.get_diastolic_blood_pressure_history(patient_id)
+                    hr_history = self.client.get_heart_rate_history(patient_id)
 
                     self.display_patient_information(demographics=demographics, weight=weight_history, height=height_history)
 
-                    patient_demographics.append(demographics)
-                    patient_weight_history.append(weight_history)
-                    patient_height_history.append(height_history)
-                    patient_bmi_history.append(bmi_history)
-                    patient_glucose_history.append(glucose_history)
+                    row1_col1, row1_col2 = st.columns(2)
 
-                    charts.plot_weight_height_bmi(weight_history, height_history, bmi_history, demographics, self.client)
-<<<<<<< HEAD
+                    with row1_col1:
+                        charts.plot_weight_height_bmi(weight_history, height_history, bmi_history, demographics, self.client)
+
+                    with row1_col2:
+                        charts.plot_blood_glucose_level(glucose_history, self.client)
+
+                    row2_col1, row2_col2 = st.columns(2)
+                    with row2_col1:
+                        charts.plot_blood_pressure(systolic_bp_history, diastolic_bp_history, demographics, self.client)
+
+                    with row2_col2:
+                        charts.plot_heart_rate(hr_history, self.client)
 
                     # Replace dummy inputs with real observation data
                     total_chol = self.client.get_latest_total_cholesterol(patient_id)
@@ -162,9 +165,6 @@ class DecisionSupportInterface():
                     self.display_risk_score(demographics, cholesterol_data, systolic_bp, is_treated_bp, is_smoker,
                                             has_diabetes)
 
-=======
-                    charts.plot_blood_glucose_level(glucose_history, self.client)
->>>>>>> adad86d3c27bf2b1a69947d54fd6fd87530c553e
             else:
                 st.warning("No matching patients found")
 
