@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-import streamlit
 import streamlit as st
 import csv
 import os
@@ -229,6 +228,7 @@ def plot_weight_height_bmi(weight_history, height_history, bmi_history, demograp
         st.pyplot(fig)
     else:
         st.warning("No weight, height, or BMI data available")
+    return
 
 def get_glucose_ranges(data, measurement):
     for row in data:
@@ -263,7 +263,7 @@ def plot_blood_glucose_level(glucose_history, client):
         x_start = indices[i]
         x_end = indices[i] + 1 / len(indices) if i == len(indices) - 1 else indices[i + 1]
 
-        x_center = (x_start + x_end) / 2 # Calculate the midpoint of the background section
+        x_center = (x_start + x_end) / 2 # Calculate the midpoints for plotting
 
         # Retrieve glucose ranges for the provided measurement
         measurement = glucose_history[i]['measurement']
@@ -340,3 +340,118 @@ def plot_blood_glucose_level(glucose_history, client):
     ax.set_title("Blood Glucose Levels", fontsize=16, fontweight='bold')
 
     st.pyplot(fig)
+
+def get_bp_ranges(bp_ranges_data, age):
+    age = int(age)
+    for row in bp_ranges_data:
+        if age <= int(row['age']):
+            return row
+    return bp_ranges_data[-1] # Return last row if age > 64
+
+def plot_blood_pressure(systolic_history, diastolic_history, demographics, client):
+    if not systolic_history or not diastolic_history:
+        st.warning("No blood pressure data available")
+        return
+
+    # Extract data from database
+    birthdate = demographics[2]
+    systolic_dict = {entry['date']: float(entry['display'].split()[0]) for entry in systolic_history}
+    diastolic_dict = {entry['date']: float(entry['display'].split()[0]) for entry in diastolic_history}
+    common_dates = sorted(set(systolic_dict.keys()) & set(diastolic_dict.keys()))
+
+    dates = []
+    systolic_values = []
+    diastolic_values = []
+    x_centers = []
+
+    for date in common_dates:
+        dates.append(date)
+        systolic_values.append(systolic_dict[date])
+        diastolic_values.append(diastolic_dict[date])
+
+    indices = np.linspace(0, 1, len(dates))
+
+    for i in range(len(indices)):
+        x_start = indices[i]
+        x_end = indices[i] + 1 / len(indices) if i == len(indices) - 1 else indices[
+            i + 1]
+        x_center = (x_start + x_end) / 2
+        x_centers.append(x_center)
+
+    # Load BP ranges from CSV
+    data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
+    file_path = os.path.join(data_dir, 'bp_ranges.csv')
+    bp_ranges_data = load_data(file_path)
+
+    ymin = min(min(diastolic_values) - 50, 40)
+    ymax = max(max(systolic_values) + 50, 200)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.set_facecolor('#D3D3D3')
+
+    # Plot BP points
+    ax.plot(x_centers, systolic_values, '-', linewidth=1.5, color='black')
+    ax.plot(x_centers, diastolic_values, '-', linewidth=1.5, color='black')
+
+    for i in range(len(dates)):
+        x_center = x_centers[i]
+        sys_value = systolic_values[i]
+        dia_value = diastolic_values[i]
+
+        age = client._calculate_age(birthdate, dates[i])
+        row = get_bp_ranges(bp_ranges_data, age)
+
+        sys_low = float(row['systolic low'])
+        sys_elevated = float(row['systolic elevated'])
+
+        dia_low = float(row['diastolic low'])
+        dia_elevated = float(row['diastolic elevated'])
+
+        # Assign marker colors based on glucose level category
+        if sys_value < sys_low:
+            markeredgecolor = 'blue'  # Low
+        elif sys_low <= sys_value < sys_elevated:
+            markeredgecolor = 'green'  # Normal
+        else:
+            markeredgecolor = 'red'  # Elevated
+
+        # Plot individual systolic bp data points with corresponding color coding
+        ax.plot(x_center, sys_value, 'o', markeredgecolor=markeredgecolor, markerfacecolor='white',
+                markersize=8, markeredgewidth=2)
+
+        if dia_value < dia_low:
+            markeredgecolor = 'blue'  # Low
+        elif dia_low <= dia_value < dia_elevated:
+            markeredgecolor = 'green'  # Normal
+        else:
+            markeredgecolor = 'red'  # Elevated
+
+        # Plot individual systolic bp data points with corresponding color coding
+        ax.plot(x_center, dia_value, 'o', markeredgecolor=markeredgecolor, markerfacecolor='white',
+                markersize=8, markeredgewidth=2)
+
+    # Legend
+    legend_elements = [
+        mlines.Line2D([], [], color='black', marker='o', label='Systolic (upper)'),
+        mlines.Line2D([], [], color='black', marker='o', label='Diastolic (lower)'),
+        mlines.Line2D([], [], color='black', markeredgecolor='red', marker='o',
+                      markerfacecolor='white', markersize=8, markeredgewidth=2, label='Elevated'),
+        mlines.Line2D([], [], color='black', markeredgecolor='green', marker='o',
+                      markerfacecolor='white', markersize=8, markeredgewidth=2, label='Normal'),
+        mlines.Line2D([], [], color='black', markeredgecolor='blue', marker='o',
+                      markerfacecolor='white', markersize=8, markeredgewidth=2, label='Low')
+    ]
+    font_properties = fm.FontProperties(size=12)
+    ax.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(1.1, 1), prop=font_properties)
+
+    ax.set_xticks(x_centers)
+    ax.set_xticklabels([date.strftime('%d-%m-%Y') for date in dates], rotation=45, ha='right', fontsize=9)
+    ax.set_ylabel("Blood Pressure (mmHg)", fontsize=12)
+    ax.set_ylim(ymin, ymax)
+    ax.grid(True, axis='x', linestyle='--', alpha=0.6)
+    ax.set_title("Blood Pressure Levels", fontsize=16, fontweight='bold')
+
+    st.pyplot(fig)
+
+def plot_heart_rate(hr_history, client):
+    return
