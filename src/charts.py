@@ -4,6 +4,7 @@ import csv
 import os
 import matplotlib.lines as mlines
 import matplotlib.font_manager as fm
+from matplotlib.patches import Patch
 import numpy as np
 
 # Open and read the CSV file. Return dictionary containing the data.
@@ -90,8 +91,8 @@ def plot_weight_height_bmi(weight_history, height_history, bmi_history, demograp
         bmi_ranges_data = load_data(female_bmi_path)
     else:
         data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
-        female_bmi_path = os.path.join(data_dir, 'female_bmi.csv')
-        bmi_ranges_data = load_data(female_bmi_path)
+        male_bmi_path = os.path.join(data_dir, 'male_bmi.csv')
+        bmi_ranges_data = load_data(male_bmi_path)
 
     # Calculate BMI if it is not in the database and weight and height are
     if not bmi_history and weight_history and height_history:
@@ -151,10 +152,10 @@ def plot_weight_height_bmi(weight_history, height_history, bmi_history, demograp
             obese_scaled = (210 / 50) * float(bmi_row['obese'])
 
             # Plot the background colors
-            ax1.fill([x_start, x_start, x_end, x_end], [0, normal_scaled, normal_scaled, 0], color='#DAE8FC',
+            ax1.fill([x_start, x_start, x_end, x_end], [0, normal_scaled, normal_scaled, 0], color='#BDD7F5',
                     alpha=0.7)  # underweight
             ax1.fill([x_start, x_start, x_end, x_end], [normal_scaled, overweight_scaled, overweight_scaled,
-                    normal_scaled], color='#D5E8D4', alpha=0.7)  # normal
+                    normal_scaled], color='#C2DCC1', alpha=0.7)  # normal
             ax1.fill([x_start, x_start, x_end, x_end], [overweight_scaled, obese_scaled, obese_scaled,
                      overweight_scaled], color='#FFF2CC', alpha=0.7)  # overweight
             ax1.fill([x_start, x_start, x_end, x_end], [obese_scaled, 210, 210, obese_scaled],
@@ -193,25 +194,26 @@ def plot_weight_height_bmi(weight_history, height_history, bmi_history, demograp
         # Customize labels
         legend_elements = [
             mlines.Line2D([], [], color='#004C99', linewidth=1.5, marker='o', label='Height'),
-            mlines.Line2D([], [], color='black', marker='o', markerfacecolor='white', markersize=8,
-                          markeredgewidth=2, label='BMI'),
             mlines.Line2D([], [], color='#1F5E61', linewidth=1.5, marker='o', label='Weight'),
-            mlines.Line2D([], [], color='black', markeredgecolor='#0000FF', marker='o',
-                          markerfacecolor='white', markersize=8, markeredgewidth=2, label='Underweight'),
-            mlines.Line2D([], [], color='#DAE8FC', linewidth=10, label='Underweight (Background)'),
-            mlines.Line2D([], [], color='black', markeredgecolor='#00CC00', marker='o',
-                          markerfacecolor='white', markersize=8, markeredgewidth=2, label='Normal'),
-            mlines.Line2D([], [], color='#D5E8D4', linewidth=10, label='Normal (Background)'),
-            mlines.Line2D([], [], color='black', markeredgecolor='#FF8000', marker='o',
-                          markerfacecolor='white', markersize=8, markeredgewidth=2, label='Overweight'),
-            mlines.Line2D([], [], color='#FFF2CC', linewidth=10, label='Overweight (Background)'),
+            mlines.Line2D([], [], color='none', label='BMI:'),
             mlines.Line2D([], [], color='black', markeredgecolor='#FF0000', marker='o',
                           markerfacecolor='white', markersize=8, markeredgewidth=2, label='Obese'),
-            mlines.Line2D([], [], color='#F8CECC', linewidth=10, label='Obese (Background)')
+            mlines.Line2D([], [], color='black', markeredgecolor='#FF8000', marker='o',
+                          markerfacecolor='white', markersize=8, markeredgewidth=2, label='Overweight'),
+            mlines.Line2D([], [], color='black', markeredgecolor='#00CC00', marker='o',
+                          markerfacecolor='white', markersize=8, markeredgewidth=2, label='Normal'),
+            mlines.Line2D([], [], color='black', markeredgecolor='#0000FF', marker='o',
+                          markerfacecolor='white', markersize=8, markeredgewidth=2, label='Underweight'),
+            Patch(color='#F8CECC', linewidth=9, label='Obese'),
+            Patch(color='#FFF2CC', linewidth=9, label='Overweight'),
+            Patch(color='#C2DCC1', linewidth=9, label='Normal'),
+            Patch(color='#BDD7F5', linewidth=9, label='Underweight')
         ]
 
         font_properties = fm.FontProperties(size=12)
-        ax1.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(1.1, 1), prop=font_properties)
+        legend = ax1.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(1.1, 1), prop=font_properties)
+        legend.get_frame().set_facecolor('#D3D3D3')
+        legend.get_frame().set_edgecolor('black')
 
         all_dates = sorted(set(weight_dates + height_dates + bmi_dates))
         ax1.set_xticks(x_centers_weight)
@@ -223,8 +225,8 @@ def plot_weight_height_bmi(weight_history, height_history, bmi_history, demograp
         ax2.set_ylabel(r"BMI (kg/m$^2$)", fontsize=12)
         ax2.set_ylim(0, 50)
         ax2.set_yticks(range(0, 55, 5))
-
         ax1.set_title("Weight, Height & BMI", fontsize=16, fontweight='bold')
+
         st.pyplot(fig)
     else:
         st.warning("No weight, height, or BMI data available")
@@ -267,13 +269,13 @@ def plot_blood_glucose_level(glucose_history, client):
 
         # Retrieve glucose ranges for the provided measurement
         measurement = glucose_history[i]['measurement']
-        row = get_glucose_ranges(glucose_ranges_data, measurement)
+        glucose_ranges = get_glucose_ranges(glucose_ranges_data, measurement)
 
         # Determine the prediabetes and diabetes thresholds
-        prediabetes = float(row['prediabetes'])
-        diabetes = float(row['diabetes'])
+        prediabetes = float(glucose_ranges['prediabetes'])
+        diabetes = float(glucose_ranges['diabetes'])
         # Plot the background colors
-        ax.fill([x_start, x_start, x_end, x_end], [ymin, prediabetes, prediabetes, ymin], color='#D5E8D4',
+        ax.fill([x_start, x_start, x_end, x_end], [ymin, prediabetes, prediabetes, ymin], color='#C2DCC1',
                 alpha=0.7)  # Normal
         ax.fill([x_start, x_start, x_end, x_end], [prediabetes, diabetes, diabetes, prediabetes], color='#FFF2CC',
                 alpha=0.7)  # Prediabetic
@@ -286,7 +288,7 @@ def plot_blood_glucose_level(glucose_history, client):
         y_values.append(glucose_value)
 
     # Plot the blood glucose datapoints
-    ax.plot(x_centers, y_values, '-', linewidth=1.5, color='black', label="Blood Glucose Level")
+    ax.plot(x_centers, y_values, '-', linewidth=1.5, color='black')
 
     for i in range(len(indices)):
         x_center = x_centers[i]
@@ -312,21 +314,22 @@ def plot_blood_glucose_level(glucose_history, client):
 
     # Customize legend
     legend_elements = [
-        mlines.Line2D([], [], color='black', marker='o', markerfacecolor='white', markersize=8,
-                      markeredgewidth=2, label='Blood Glucose Level'),
-        mlines.Line2D([], [], color='black', markeredgecolor='green', marker='o',
-                      markerfacecolor='white', markersize=8, markeredgewidth=2, label='Normal'),
-        mlines.Line2D([], [], color='#D5E8D4', linewidth=10, label='Normal (Background)'),
-        mlines.Line2D([], [], color='black', markeredgecolor='orange', marker='o',
-                      markerfacecolor='white', markersize=8, markeredgewidth=2, label='Prediabetic'),
-        mlines.Line2D([], [], color='#FFF2CC', linewidth=10, label='Prediabetic (Background)'),
         mlines.Line2D([], [], color='black', markeredgecolor='red', marker='o',
                       markerfacecolor='white', markersize=8, markeredgewidth=2, label='Diabetic'),
-        mlines.Line2D([], [], color='#F8CECC', linewidth=10, label='Diabetic (Background)')
+        mlines.Line2D([], [], color='black', markeredgecolor='orange', marker='o',
+                      markerfacecolor='white', markersize=8, markeredgewidth=2, label='Prediabetic'),
+        mlines.Line2D([], [], color='black', markeredgecolor='green', marker='o',
+                      markerfacecolor='white', markersize=8, markeredgewidth=2, label='Normal'),
+        Patch(color='#F8CECC', linewidth=9, label='Diabetic'),
+        Patch(color='#FFF2CC', linewidth=9, label='Prediabetic'),
+        Patch(color='#C2DCC1', linewidth=9, label='Normal')
     ]
 
     font_properties = fm.FontProperties(size=12)
-    ax.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(1.1, 1), prop=font_properties)
+    legend = ax.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(1.05, 1), prop=font_properties)
+    legend.get_frame().set_facecolor('#D3D3D3')
+    legend.get_frame().set_edgecolor('black')
+
     ax.set_xticks(x_centers)
     if (len(glucose_history) > 40):
         rotation = 90
@@ -390,8 +393,8 @@ def plot_blood_pressure(systolic_history, diastolic_history, demographics, clien
     ax.set_facecolor('#D3D3D3')
 
     # Plot BP points
-    ax.plot(x_centers, systolic_values, '-', linewidth=1.5, color='black')
-    ax.plot(x_centers, diastolic_values, '-', linewidth=1.5, color='black')
+    ax.plot(x_centers, systolic_values, '-', linewidth=2, color='black')
+    ax.plot(x_centers, diastolic_values, '-', linewidth=2, color='yellow')
 
     for i in range(len(dates)):
         x_center = x_centers[i]
@@ -399,13 +402,13 @@ def plot_blood_pressure(systolic_history, diastolic_history, demographics, clien
         dia_value = diastolic_values[i]
 
         age = client._calculate_age(birthdate, dates[i])
-        row = get_bp_ranges(bp_ranges_data, age)
+        ranges_data = get_bp_ranges(bp_ranges_data, age)
 
-        sys_low = float(row['systolic low'])
-        sys_elevated = float(row['systolic elevated'])
+        sys_low = float(ranges_data['systolic low'])
+        sys_elevated = float(ranges_data['systolic elevated'])
 
-        dia_low = float(row['diastolic low'])
-        dia_elevated = float(row['diastolic elevated'])
+        dia_low = float(ranges_data['diastolic low'])
+        dia_elevated = float(ranges_data['diastolic elevated'])
 
         # Assign marker colors based on glucose level category
         if sys_value < sys_low:
@@ -432,8 +435,10 @@ def plot_blood_pressure(systolic_history, diastolic_history, demographics, clien
 
     # Legend
     legend_elements = [
-        mlines.Line2D([], [], color='black', marker='o', label='Systolic (upper)'),
-        mlines.Line2D([], [], color='black', marker='o', label='Diastolic (lower)'),
+        mlines.Line2D([], [], color='black', marker='o', markerfacecolor='white', markersize=8,
+                      markeredgewidth=2, label='Systolic'),
+        mlines.Line2D([], [], color='yellow', marker='o', markerfacecolor='white', markersize=8,
+                      markeredgewidth=2, label='Diastolic'),
         mlines.Line2D([], [], color='black', markeredgecolor='red', marker='o',
                       markerfacecolor='white', markersize=8, markeredgewidth=2, label='Elevated'),
         mlines.Line2D([], [], color='black', markeredgecolor='green', marker='o',
@@ -441,8 +446,11 @@ def plot_blood_pressure(systolic_history, diastolic_history, demographics, clien
         mlines.Line2D([], [], color='black', markeredgecolor='blue', marker='o',
                       markerfacecolor='white', markersize=8, markeredgewidth=2, label='Low')
     ]
+
     font_properties = fm.FontProperties(size=12)
-    ax.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(1.1, 1), prop=font_properties)
+    legend = ax.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(1.05, 1), prop=font_properties)
+    legend.get_frame().set_facecolor('#D3D3D3')
+    legend.get_frame().set_edgecolor('black')
 
     ax.set_xticks(x_centers)
     ax.set_xticklabels([date.strftime('%d-%m-%Y') for date in dates], rotation=45, ha='right', fontsize=9)
@@ -453,5 +461,146 @@ def plot_blood_pressure(systolic_history, diastolic_history, demographics, clien
 
     st.pyplot(fig)
 
-def plot_heart_rate(hr_history, client):
-    return
+def get_hr_ranges(hr_ranges_data, age):
+    age = int(age)
+    for row in hr_ranges_data:
+        if age <= int(row['age']):
+            return row
+    return hr_ranges_data[-1] # Return last row if age > 65
+
+def plot_heart_rate(hr_history, demographics, client):
+    if not hr_history:
+        st.warning("No heart rate data available")
+        return
+
+    birthdate = demographics[2]
+    gender = demographics[4]
+
+    # Extract dates and heart rate values
+    dates = [entry['date'] for entry in hr_history]
+    hr_values = [float(entry['display'].split()[0]) for entry in hr_history]
+    indices = np.linspace(0, 1, len(hr_history))  # Normalize
+
+    ymin = min(min(hr_values) - 50, 0)
+    ymax = max(max(hr_values) + 50, 150)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    x_centers = []
+    for i in range(len(indices)):
+        x_start = indices[i]
+        x_end = indices[i] + 1 / len(indices) if i == len(indices) - 1 else indices[
+            i + 1]
+        x_center = (x_start + x_end) / 2
+        x_centers.append(x_center)
+
+    if gender == "female":
+        data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
+        female_hr_path = os.path.join(data_dir, 'female_hr_ranges.csv')
+        hr_ranges_data = load_data(female_hr_path)
+    else:
+        data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
+        male_hr_path = os.path.join(data_dir, 'male_hr_ranges.csv')
+        hr_ranges_data = load_data(male_hr_path)
+
+    ax.plot(x_centers, hr_values, 'o-', linewidth=2, color='black')
+
+    # Add background color for HR ranges
+    for i in range(len(dates)):
+        x_start = indices[i]
+        x_end = indices[i] + 1 / len(indices) if i == len(indices) - 1 else indices[i + 1]
+        date = dates[i]
+        age_at_date = client._calculate_age(birthdate, date)
+
+        # Retrieve BMI ranges for the provided age
+        hr_ranges = get_hr_ranges(hr_ranges_data, age_at_date)
+        low = float(hr_ranges['low'])
+        elevated = float(hr_ranges['elevated'])
+
+        # Plot the background colors
+        ax.fill([x_start, x_start, x_end, x_end], [ymin, low, low, ymin], color='#BDD7F5',
+                 alpha=0.7)  # Low
+        ax.fill([x_start, x_start, x_end, x_end], [low, elevated, elevated, low], color='#C2DCC1', alpha=0.7)  # Normal
+        ax.fill([x_start, x_start, x_end, x_end], [elevated, ymax, ymax, elevated],
+                 color='#F8CECC', alpha=0.7)  # Elevated
+
+    # Plot the connecting line for hr datapoints
+    ax.plot(x_centers, hr_values, '-', linewidth=2, color='black')
+
+    for i in range(len(dates)):
+        x_center = x_centers[i]
+        hr_value = hr_values[i]
+        date = dates[i]
+        age_at_date = client._calculate_age(birthdate, date)
+
+        # Retrieve HR ranges for the provided age
+        hr_ranges = get_hr_ranges(hr_ranges_data, age_at_date)
+        low = float(hr_ranges['low'])
+        elevated = float(hr_ranges['elevated'])
+
+        # Assign marker colors based on heart rate ranges
+        if hr_value < low:
+            markeredgecolor = 'blue'  # Low
+        elif low <= hr_value < elevated:
+            markeredgecolor = 'green'  # Normal
+        else:
+            markeredgecolor = 'red'  # Elevated
+
+        # Plot individual hr data points with corresponding color coding
+        ax.plot(x_center, hr_value, 'o', markeredgecolor=markeredgecolor, markerfacecolor='white',
+                markersize=8, markeredgewidth=2)
+
+    legend_elements = [
+        mlines.Line2D([], [], color='black', markeredgecolor='red', marker='o',
+                      markerfacecolor='white', markersize=8, markeredgewidth=2, label='Elevated'),
+        mlines.Line2D([], [], color='black', markeredgecolor='green', marker='o',
+                      markerfacecolor='white', markersize=8, markeredgewidth=2, label='Normal'),
+        mlines.Line2D([], [], color='black', markeredgecolor='blue', marker='o',
+                      markerfacecolor='white', markersize=8, markeredgewidth=2, label='Low'),
+        Patch(color='#F8CECC', linewidth=9, label='Elevated'),
+        Patch(color='#C2DCC1', linewidth=9, label='Normal'),
+        Patch(color='#BDD7F5', linewidth=9, label='Low')
+    ]
+
+    font_properties = fm.FontProperties(size=12)
+    legend = ax.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(1.05, 1), prop=font_properties)
+    legend.get_frame().set_facecolor('#D3D3D3')
+    legend.get_frame().set_edgecolor('black')
+
+    ax.set_xticks(x_centers)
+    ax.set_xticklabels([date.strftime('%d-%m-%Y') for date in dates], rotation=45, ha='right', fontsize=9)
+    ax.set_ylabel("Heart Rate (bpm)", fontsize=12)
+    ax.set_ylim(ymin, ymax)
+    ax.grid(True, axis='x', linestyle='--', alpha=0.6)
+    ax.set_title("Heart Rate", fontsize=16, fontweight='bold')
+
+    st.pyplot(fig)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
