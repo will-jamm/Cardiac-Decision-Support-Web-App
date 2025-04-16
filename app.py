@@ -136,17 +136,20 @@ class DecisionSupportInterface():
                     row1_col1, row1_col2 = st.columns(2)
 
                     with row1_col1:
-                        charts.plot_weight_height_bmi(weight_history, height_history, bmi_history, demographics, self.client)
+                        charts.plot_weight_height_bmi(weight_history, height_history, bmi_history, demographics,
+                                                      self.client)
 
                     with row1_col2:
                         charts.plot_blood_glucose_level(glucose_history, self.client)
 
                     row2_col1, row2_col2 = st.columns(2)
+
                     with row2_col1:
-                        charts.plot_blood_pressure(systolic_bp_history, diastolic_bp_history, demographics, self.client)
+                        charts.plot_blood_pressure(systolic_bp_history, diastolic_bp_history, demographics,
+                                                       self.client)
 
                     with row2_col2:
-                        charts.plot_heart_rate(hr_history, self.client)
+                        charts.plot_heart_rate(hr_history, demographics, self.client)
 
                     # Replace dummy inputs with real observation data
                     total_chol = self.client.get_latest_total_cholesterol(patient_id)
