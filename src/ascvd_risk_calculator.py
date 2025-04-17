@@ -149,6 +149,7 @@ def main():
         'isSmoker': False,
         'hasDiabetes': False
     }
+
     test_patient2 = {
         'age': 55,
         'sex': 'female',
@@ -158,7 +159,8 @@ def main():
         'isBpTreated': False,
         'isSmoker': False,
         'hasDiabetes': False
-}
+    }
+    
     risk = calculator.compute_10_year_risk(
             age=test_patient2['age'],
             sex=test_patient2['sex'],

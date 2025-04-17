@@ -41,11 +41,20 @@ class FHIRClient(object):
                 surname = resource_patient['name'][0]['family'][0]
                 birthdate = datetime.strptime(resource_patient['birthDate'], '%Y-%m-%d')
                 age = self._calculate_age(birthdate, date.today())
+                birthdate = birthdate.strftime('%d-%m-%Y')
                 gender = resource_patient['gender']
                 return given, surname, birthdate, age, gender
         return None
 
     def _calculate_age(self, born, reference_date):
+       
+        # Convert to datetime objects if strings are provided
+        if isinstance(born, str):
+            born = datetime.strptime(born, '%d-%m-%Y')
+        if isinstance(reference_date, str):
+            reference_date = datetime.strptime(reference_date, '%d-%m-%Y')
+                
+        # Calculate age
         return reference_date.year - born.year - ((reference_date.month, reference_date.day) < (born.month, born.day))
     
     def get_all_patient_ids(self):

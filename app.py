@@ -52,18 +52,40 @@ class DecisionSupportInterface():
             latest_weight = "No data"
         else:
             latest_weight = weight[-1]['display']
+            weight_date = weight[-1]['formatted_date']
 
         if len(height) == 0:
             latest_height = "No data"
         else:
             latest_height = height[-1]['display']
+            height_date = height[-1]['formatted_date']
 
         if demographics:
-            given, surname, _, age, _ = demographics
-            st.write(f"Patient: {given} {surname}")
-            st.write(f"Age: {age}")
-            st.write(f"Height: {latest_height}")
-            st.write(f"Weight: {latest_weight}")
+            given, surname, birthdate, age, sex = demographics
+            
+            
+            st.title(f"{given} {surname}")                
+
+            col1, col2 = st.columns(2)
+            with col1:
+                with st.container(border=True):  # Light blue background
+                    st.subheader("Patient Information")
+                    st.write(f"**Age:** {age} years")
+                    st.write(f"**Sex:** {sex}")
+                    st.write(f"**Date of Birth:** {birthdate}")
+
+            with col2:
+                with st.container(border=True):  # Light green background
+                    st.subheader("Latest Measurements")
+                    if latest_height == "No data":
+                        st.write(f"**Height:** {latest_height}")
+                    else:
+                        st.write(f"**Height:** {latest_height} (measured: **{height_date}**)")
+        
+                    if latest_weight == "No data":
+                        st.write(f"**Weight:** {latest_weight}")
+                    else:
+                        st.write(f"**Weight:** {latest_weight} (measured: **{weight_date}**)")
 
 
     def display_risk_score(self, demographics, cholesterol_data, systolic_bp, is_treated_bp, is_smoker, has_diabetes):
@@ -72,18 +94,19 @@ class DecisionSupportInterface():
             return
 
         total_chol = cholesterol_data.get("total_cholesterol")
+        print(total_chol)
         hdl_chol = cholesterol_data.get("hdl_cholesterol")
 
         if not total_chol or not hdl_chol:
             st.info("Missing cholesterol data for risk calculation.")
             return
 
-        given, surname, _, age, _ = demographics
+        _, _, _, age, sex = demographics
 
         risk_calc = ASCVDRiskCalculator()
         risk = risk_calc.compute_10_year_risk(
             age=age,
-            sex='male',  # 🔄 You can improve this later with actual gender data
+            sex=sex,  
             total_cholesterol=total_chol,
             hdl_cholesterol=hdl_chol,
             systolic_bp=systolic_bp,
@@ -99,15 +122,16 @@ class DecisionSupportInterface():
 
     
     def dashboard(self):
-        st.title("Decision Support Interface")
-        st.write("The interface is divided into two main sections: the patient information section and the decision support section.")
-        
+        st.title("CARDICARE Cardiac Health Support Interface")
+        with st.sidebar:
+            st.text("Sidebar")
         patient_ids = self.client.get_all_patient_ids()
 
         with st.form(key='search_form'):
             search_col1, search_col2 = st.columns([3, 1])
             with search_col1:
-                search_query = st.text_input("Search by name or ID", "")
+                search_query = st.text_input("Search by patient ID", "")
+
             with search_col2:
                 st.write("")
                 st.write("")
@@ -131,7 +155,21 @@ class DecisionSupportInterface():
                     diastolic_bp_history = self.client.get_diastolic_blood_pressure_history(patient_id)
                     hr_history = self.client.get_heart_rate_history(patient_id)
 
+                    total_chol = self.client.get_latest_total_cholesterol(patient_id)
+                    hdl_chol = self.client.get_latest_hdl_cholesterol(patient_id)
+                    systolic_bp = self.client.get_latest_systolic_bp(patient_id)
+
+                    is_treated_bp = self.client.is_patient_on_bp_medication(patient_id)
+                    is_smoker = self.client.is_patient_smoker(patient_id)
+                    has_diabetes = self.client.does_patient_have_diabetes(patient_id)
+
+                    cholesterol_data = {
+                        "total_cholesterol": total_chol,
+                        "hdl_cholesterol": hdl_chol
+                    }
+
                     self.display_patient_information(demographics=demographics, weight=weight_history, height=height_history)
+
 
                     row1_col1, row1_col2 = st.columns(2)
 
@@ -151,20 +189,7 @@ class DecisionSupportInterface():
                     with row2_col2:
                         charts.plot_heart_rate(hr_history, demographics, self.client)
 
-                    # Replace dummy inputs with real observation data
-                    total_chol = self.client.get_latest_total_cholesterol(patient_id)
-                    hdl_chol = self.client.get_latest_hdl_cholesterol(patient_id)
-                    systolic_bp = self.client.get_latest_systolic_bp(patient_id)
-
-                    is_treated_bp = self.client.is_patient_on_bp_medication(patient_id)
-                    is_smoker = self.client.is_patient_smoker(patient_id)
-                    has_diabetes = self.client.does_patient_have_diabetes(patient_id)
-
-                    cholesterol_data = {
-                        "total_cholesterol": total_chol,
-                        "hdl_cholesterol": hdl_chol
-                    }
-
+                    
                     self.display_risk_score(demographics, cholesterol_data, systolic_bp, is_treated_bp, is_smoker,
                                             has_diabetes)
 
