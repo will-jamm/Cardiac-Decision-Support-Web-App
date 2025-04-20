@@ -1,9 +1,12 @@
 from src.fhir_client import FHIRClient
-import numpy as np
+import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 from src import charts
 from src.ascvd_risk_calculator import ASCVDRiskCalculator
+from src.forecast import get_patient_name_by_id, forecasting
+import os
+
 
 # import streamlit_authenticator as stauth
 
@@ -281,7 +284,62 @@ class DecisionSupportInterface():
                     st.divider()
                     st.title("ASCVD Risk Assessment")
                     self.display_risk_score(demographics, cholesterol_data, systolic_bp, is_treated_bp, is_smoker,
-                                            has_diabetes) 
+                                            has_diabetes)
+
+                    import plotly.graph_objects as go
+
+                    # Inside your forecasting block (after ASCVD Risk assessment)
+                    st.divider()
+                    if patient_id:
+                        st.subheader("Forecasting Health Trends")
+
+                        df = pd.read_csv("src/out.csv")
+
+                        # Define the allowed features
+                        allowed_features = [
+                            "bmi",
+                            "weight",
+                            "height",
+                            "heart_rate",
+                            "Systolic blood pressure",
+                            "Diastolic blood pressure"
+                        ]
+
+                        features_list_from_csv = df["Features"].unique().tolist()
+                        filtered_features = [feat for feat in features_list_from_csv if feat in allowed_features]
+
+                        selected_feat = st.selectbox("Select a health feature", filtered_features)
+                        duration = st.number_input("Prediction duration (days)", min_value=1, max_value=30, value=5)
+
+                        if st.button("Run Forecast"):
+                            # Get unit for selected feature (any row for this patient + feature)
+                            filtered_df = df[
+                                (df["Features"] == selected_feat) & (df["Name"] == get_patient_name_by_id(patient_id))]
+                            unit = filtered_df["Unit"].iloc[0] if not filtered_df.empty else ""
+
+                            result = forecasting(selected_feat, duration, patient_id)
+
+                            if isinstance(result, str):
+                                st.warning(result)
+                            else:
+                                st.success(f"Forecasted {selected_feat} for next {duration} days:")
+
+                                # Create forecast steps
+                                steps = list(range(1, duration + 1))
+
+                                # Plot with Plotly
+                                fig = go.Figure()
+                                fig.add_trace(go.Scatter(x=steps, y=result, mode='lines+markers', name=selected_feat))
+
+                                fig.update_layout(
+                                    xaxis_title="Future Time Steps (days)",
+                                    yaxis_title=f"{selected_feat} ({unit})",
+                                    title=f"Forecast for {selected_feat}"
+                                )
+
+                                st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.warning("Please search for a patient to perform forecasting.")
 
             else:
                 st.warning("No matching patients found")
