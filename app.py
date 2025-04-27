@@ -1,3 +1,5 @@
+from functools import lru_cache
+import time
 from src.fhir_client import FHIRClient
 import pandas as pd
 import streamlit as st
@@ -7,9 +9,6 @@ from src.ascvd_risk_calculator import ASCVDRiskCalculator
 from src.forecast import get_patient_name_by_id, forecasting
 import os
 
-
-# import streamlit_authenticator as stauth
-
 st.set_page_config(layout="wide")
 
 JSON_DATABASE = 'data/json_database.json'
@@ -17,13 +16,56 @@ fullUrl = "http://tutsgnfhir.com"
 
 class DecisionSupportInterface():
     def __init__(self):
-        self.client = self.initialize_client()
+        """Initialize the app with lazy loading"""
+        # Initialize client only when needed
+        if 'client' not in st.session_state:
+            with st.spinner("Initializing system..."):
+                st.session_state.client = FHIRClient(
+                    server_url=fullUrl,
+                    json_path=JSON_DATABASE
+                )
+    
+        self.client = st.session_state.client
 
-    def initialize_client(self):
-        return FHIRClient(
-            server_url=fullUrl,
-            json_path=JSON_DATABASE
-        )
+    @st.cache_data(ttl=3600)
+    def load_patient_data(_client, patient_id):
+        """Cache patient data retrieval"""
+        return {
+            "demographics": _client.get_demographics(patient_id),
+            "weight_history": _client.get_weight_history(patient_id),
+            "height_history": _client.get_height_history(patient_id),
+            "bmi_history": _client.get_bmi_history(patient_id),
+            "glucose_history": _client.get_glucose_history(patient_id),
+            "systolic_bp_history": _client.get_systolic_blood_pressure_history(patient_id),
+            "diastolic_bp_history": _client.get_diastolic_blood_pressure_history(patient_id),
+            "hr_history": _client.get_heart_rate_history(patient_id),
+            "total_chol": _client.get_latest_total_cholesterol(patient_id),
+            "hdl_chol": _client.get_latest_hdl_cholesterol(patient_id),
+            "systolic_bp": _client.get_latest_systolic_bp(patient_id),
+            "is_treated_bp": _client.is_patient_on_bp_medication(patient_id),
+            "is_smoker": _client.is_patient_smoker(patient_id),
+            "has_diabetes": _client.does_patient_have_diabetes(patient_id)
+        }
+    
+    @st.cache_data(ttl=3600)
+    def get_all_patient_ids(_client):
+        """Cache the patient IDs list"""
+        return _client.get_all_patient_ids()
+    
+    @lru_cache(maxsize=32)
+    def read_csv_data():
+        """Cache CSV reading for forecasting"""
+        return pd.read_csv("src/out.csv")
+    
+    @st.cache_data(ttl=300)  # Cache for 5 minutes
+    def build_patient_cache(_client, patient_ids):
+        """Build patient cache for searching"""
+        patient_cache = {}
+        for patient_id in patient_ids:
+            demographics = _client.get_demographics(patient_id)
+            if demographics:
+                patient_cache[patient_id] = demographics
+        return patient_cache
 
     def search_patients(self, query, patient_ids):
     
@@ -33,12 +75,9 @@ class DecisionSupportInterface():
         query = query.lower()
         
         if not hasattr(self, '_patient_cache') or self._patient_cache is None:
-            # Initialize cache
-            self._patient_cache = {}
-            for patient_id in patient_ids:
-                demographics = self.client.get_demographics(patient_id)
-                if demographics:
-                    self._patient_cache[patient_id] = demographics
+
+            with st.spinner("Building patient search index..."):
+                self._patient_cache = DecisionSupportInterface.build_patient_cache(self.client, patient_ids)
 
         results = []
         for patient_id, demographics in self._patient_cache.items():
@@ -211,13 +250,143 @@ class DecisionSupportInterface():
             )
             st.write(f"**10-Year ASCVD Risk Score: {risk:.1f}%**")
             
+    def _display_patient_dashboard(self, patient_id):
+        cache_key = f"patient_{patient_id}"
+        if cache_key not in st.session_state.get('loaded_patients', {}):
+            with st.spinner(f"Loading data for patient {patient_id}..."):
+                st.session_state.loaded_patients = st.session_state.get('loaded_patients', {})
+                st.session_state.loaded_patients[cache_key] = DecisionSupportInterface.load_patient_data(self.client, patient_id)
 
+        patient_data = st.session_state.loaded_patients[cache_key]
+
+        # Extract data from the cache
+        demographics = patient_data["demographics"]
+        weight_history = patient_data["weight_history"]
+        height_history = patient_data["height_history"]
+        bmi_history = patient_data["bmi_history"]
+        glucose_history = patient_data["glucose_history"]
+        systolic_bp_history = patient_data["systolic_bp_history"]
+        diastolic_bp_history = patient_data["diastolic_bp_history"]
+        hr_history = patient_data["hr_history"]
+
+        cholesterol_data = {
+            "total_cholesterol": patient_data["total_chol"],
+            "hdl_cholesterol": patient_data["hdl_chol"]
+        }
+
+        self.display_patient_information(
+            demographics=demographics, 
+            weight=weight_history, 
+            height=height_history, 
+            cholesterol_data=cholesterol_data
+        )
+
+        with st.expander("Health Trends", expanded=True):
+            row1_col1, row1_col2 = st.columns(2)
+            with row1_col1:
+                charts.plot_weight_height_bmi(weight_history, height_history, bmi_history, demographics, self.client)
+            with row1_col2:
+                charts.plot_blood_glucose_level(glucose_history, self.client)
+        
+            row2_col1, row2_col2 = st.columns(2)
+            with row2_col1:
+                charts.plot_blood_pressure(systolic_bp_history, diastolic_bp_history, demographics, self.client)
+            with row2_col2:
+                charts.plot_heart_rate(hr_history, demographics, self.client)
+
+        with st.expander("### ASCVD Risk Assessment", expanded=True):
+            
+            self.display_risk_score(
+                demographics, 
+                cholesterol_data, 
+                patient_data["systolic_bp"], 
+                patient_data["is_treated_bp"], 
+                patient_data["is_smoker"], 
+                patient_data["has_diabetes"]
+            )
+
+        with st.expander("Health Forecasting", expanded=False):
+            self._display_forecasting(patient_id)
+
+    def _display_forecasting(self, patient_id):
+        st.markdown("### Forecasting Health Trends")
+
+        df = pd.read_csv("src/out.csv")
     
+    
+        allowed_features = [
+            "bmi",
+            "weight",
+            "height", 
+            "heart_rate",
+            "Systolic blood pressure", 
+            "Diastolic blood pressure"
+        ]
+
+        features_list_from_csv = df["Features"].unique().tolist()
+        filtered_features = [feat for feat in features_list_from_csv if feat in allowed_features]
+        
+        # Use columns for layout
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            selected_feat = st.selectbox("Select a health feature", filtered_features)
+        with col2:
+            duration = st.number_input("Prediction days", min_value=1, max_value=30, value=5)
+        
+        # Add loading state
+        forecast_placeholder = st.empty()
+
+
+        if st.button("Run Forecast", key=f"forecast_{patient_id}"):
+            with forecast_placeholder.container():
+                with st.spinner("Calculating forecast..."):
+                    # Get unit for selected feature
+                    filtered_df = df[(df["Features"] == selected_feat) & 
+                                (df["Name"] == get_patient_name_by_id(patient_id))]
+                    unit = filtered_df["Unit"].iloc[0] if not filtered_df.empty else ""
+                    
+                    result = forecasting(selected_feat, duration, patient_id)
+                    
+                    if isinstance(result, str):
+                        st.warning(result)
+                    else:
+                        st.success(f"Forecasted {selected_feat} for next {duration} days")
+                        
+                        # Create forecast steps
+                        steps = list(range(1, duration + 1))
+                        
+                        # Plot with Plotly
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(
+                            x=steps, 
+                            y=result, 
+                            mode='lines+markers',
+                            name=selected_feat,
+                            line=dict(color='royalblue', width=3),
+                            marker=dict(size=8)
+                        ))
+                        
+                        fig.update_layout(
+                            xaxis_title="Future Time Steps (days)",
+                            yaxis_title=f"{selected_feat} ({unit})",
+                            title=f"Forecast for {selected_feat}",
+                            height=400,
+                            margin=dict(l=0, r=0, t=40, b=0),
+                            hovermode="x unified"
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+
     def dashboard(self):
         st.title("CARDICARE Cardiac Health Support Interface")
+
+        if 'patient_ids' not in st.session_state:
+            with st.spinner("Loading patient database.."):
+                st.session_state.patient_ids = self.client.get_all_patient_ids()
+            
         with st.sidebar:
-            st.text("Sidebar")
-        patient_ids = self.client.get_all_patient_ids()
+            st.text("")
 
         with st.form(key='search_form'):
             search_col1, search_col2 = st.columns([3, 1])
@@ -230,119 +399,25 @@ class DecisionSupportInterface():
                 submit_button = st.form_submit_button("Search")
             
             if submit_button:
-                st.session_state.search_results = self.search_patients(search_query, patient_ids)
-
-        if 'search_results' in st.session_state:
+                with st.spinner("Searching..."):
+                    st.session_state.search_results = self.search_patients(search_query, st.session_state.patient_ids)
+                    st.session_state.loaded_patients = {}  # Reset loaded patients cache
         
+        if 'search_results' in st.session_state and st.session_state.search_results:
             filtered_patients = st.session_state.search_results
-            if filtered_patients:
-                for patient_id in filtered_patients:
-
-                    demographics = self.client.get_demographics(patient_id)
-                    weight_history = self.client.get_weight_history(patient_id)
-                    height_history = self.client.get_height_history(patient_id)
-                    bmi_history = self.client.get_bmi_history(patient_id)
-                    glucose_history = self.client.get_glucose_history(patient_id)
-                    systolic_bp_history = self.client.get_systolic_blood_pressure_history(patient_id)
-                    diastolic_bp_history = self.client.get_diastolic_blood_pressure_history(patient_id)
-                    hr_history = self.client.get_heart_rate_history(patient_id)
-
-                    total_chol = self.client.get_latest_total_cholesterol(patient_id)
-                    hdl_chol = self.client.get_latest_hdl_cholesterol(patient_id)
-                    systolic_bp = self.client.get_latest_systolic_bp(patient_id)
-
-                    is_treated_bp = self.client.is_patient_on_bp_medication(patient_id)
-                    is_smoker = self.client.is_patient_smoker(patient_id)
-                    has_diabetes = self.client.does_patient_have_diabetes(patient_id)
-
-                    cholesterol_data = {
-                        "total_cholesterol": total_chol,
-                        "hdl_cholesterol": hdl_chol
-                    }
-
-                    self.display_patient_information(demographics=demographics, weight=weight_history, height=height_history, cholesterol_data=cholesterol_data)
-
-
-                    row1_col1, row1_col2 = st.columns(2)
-
-                    with row1_col1:
-                        charts.plot_weight_height_bmi(weight_history, height_history, bmi_history, demographics,
-                                                      self.client)
-
-                    with row1_col2:
-                        charts.plot_blood_glucose_level(glucose_history, self.client)
-
-                    row2_col1, row2_col2 = st.columns(2)
-
-                    with row2_col1:
-                        charts.plot_blood_pressure(systolic_bp_history, diastolic_bp_history, demographics,
-                                                       self.client)
-
-                    with row2_col2:
-                        charts.plot_heart_rate(hr_history, demographics, self.client)
-
-                    st.divider()
-                    st.title("ASCVD Risk Assessment")
-                    self.display_risk_score(demographics, cholesterol_data, systolic_bp, is_treated_bp, is_smoker,
-                                            has_diabetes)
-
-                    import plotly.graph_objects as go
-
-                    # Inside your forecasting block (after ASCVD Risk assessment)
-                    st.divider()
-                    if patient_id:
-                        st.subheader("Forecasting Health Trends")
-
-                        df = pd.read_csv("src/out.csv")
-
-                        # Define the allowed features
-                        allowed_features = [
-                            "bmi",
-                            "weight",
-                            "height",
-                            "heart_rate",
-                            "Systolic blood pressure",
-                            "Diastolic blood pressure"
-                        ]
-
-                        features_list_from_csv = df["Features"].unique().tolist()
-                        filtered_features = [feat for feat in features_list_from_csv if feat in allowed_features]
-
-                        selected_feat = st.selectbox("Select a health feature", filtered_features)
-                        duration = st.number_input("Prediction duration (days)", min_value=1, max_value=30, value=5)
-
-                        if st.button("Run Forecast"):
-                            # Get unit for selected feature (any row for this patient + feature)
-                            filtered_df = df[
-                                (df["Features"] == selected_feat) & (df["Name"] == get_patient_name_by_id(patient_id))]
-                            unit = filtered_df["Unit"].iloc[0] if not filtered_df.empty else ""
-
-                            result = forecasting(selected_feat, duration, patient_id)
-
-                            if isinstance(result, str):
-                                st.warning(result)
-                            else:
-                                st.success(f"Forecasted {selected_feat} for next {duration} days:")
-
-                                # Create forecast steps
-                                steps = list(range(1, duration + 1))
-
-                                # Plot with Plotly
-                                fig = go.Figure()
-                                fig.add_trace(go.Scatter(x=steps, y=result, mode='lines+markers', name=selected_feat))
-
-                                fig.update_layout(
-                                    xaxis_title="Future Time Steps (days)",
-                                    yaxis_title=f"{selected_feat} ({unit})",
-                                    title=f"Forecast for {selected_feat}"
-                                )
-
-                                st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        st.warning("Please search for a patient to perform forecasting.")
-
+        
+    
+            if len(filtered_patients) > 1:
+                patient_tabs = st.tabs([f"Patient {i+1}" for i in range(len(filtered_patients))])
+                
+                for i, patient_id in enumerate(filtered_patients):
+                    with patient_tabs[min(i, len(patient_tabs)-1)]:
+                        self._display_patient_dashboard(patient_id)
             else:
-                st.warning("No matching patients found")
+                self._display_patient_dashboard(filtered_patients[0])
+
+        elif 'search_results' in st.session_state:
+            st.warning("No matching patients found")
 
     def main(self):
         self.dashboard()
