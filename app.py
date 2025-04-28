@@ -37,6 +37,7 @@ class DecisionSupportInterface():
                 )
     
         self.client = st.session_state.client
+
     def authenticate_user(self, username, password):
         """
         Authenticate user against credentials stored in .env file
@@ -201,6 +202,15 @@ class DecisionSupportInterface():
             latest_systolic_bp = "No data"
             systolic_bp_date = ""
 
+        if isinstance(is_bp_treated, tuple) and len(is_bp_treated) > 0:
+            is_bp_treated = is_bp_treated[0]
+    
+        if isinstance(is_smoker, tuple) and len(is_smoker) > 0:
+            is_smoker = is_smoker[0]
+        
+        if isinstance(has_diabetes, tuple) and len(has_diabetes) > 0:
+            has_diabetes = has_diabetes[0]
+
 
         if demographics:
             given, surname, birthdate, age, sex = demographics
@@ -246,6 +256,23 @@ class DecisionSupportInterface():
                             st.write(f"**Systolic BP:** {latest_systolic_bp}")
                         else:
                             st.write(f"**Systolic BP:** **{latest_systolic_bp} mmHg**  ({systolic_bp_date})")
+                        
+                        if is_smoker:
+                            st.write(f"**Smoking status:** :red[**Current smoker**]")
+                        else:
+                            st.write(f"**Smoking status:** Non-smoker")
+                            
+                        # Diabetes status with highlighting
+                        if has_diabetes:
+                            st.write(f"**Diabetes:** :red[**Yes**]")
+                        else:
+                            st.write(f"**Diabetes:** No")
+                            
+                        # BP treatment status with highlighting
+                        if is_bp_treated:
+                            st.write(f"**On BP medication:** :orange[**Yes**]")
+                        else:
+                            st.write(f"**On BP medication:** No")
 
     
     def _create_risk_chart(self, risk_value):
@@ -350,6 +377,32 @@ class DecisionSupportInterface():
 
             _, _, _, age, sex = demographics
 
+            normal_ranges = {
+                "Total Cholesterol": {"min": 125, "max": 200},
+                "HDL Cholesterol": {"min": 40 if sex == "male" else 50, "max": 60}, 
+                "Systolic BP": {"min": 90, "max": 120}
+            }
+
+            tc_status = "normal"
+            if total_chol < normal_ranges["Total Cholesterol"]["min"]:
+                tc_status = "low"
+            elif total_chol > normal_ranges["Total Cholesterol"]["max"]:
+                tc_status = "high"
+                
+            # HDL cholesterol (sex-specific thresholds)
+            hdl_status = "normal"
+            if hdl_chol < normal_ranges["HDL Cholesterol"]["min"]:
+                hdl_status = "low"
+            elif hdl_chol > normal_ranges["HDL Cholesterol"]["max"]:
+                hdl_status = "high"
+                
+            # Systolic BP
+            bp_status = "normal"
+            if systolic_bp_value < normal_ranges["Systolic BP"]["min"]:
+                bp_status = "low"
+            elif systolic_bp_value > normal_ranges["Systolic BP"]["max"]:
+                bp_status = "high"
+
             risk_calc = ASCVDRiskCalculator()
             risk = risk_calc.compute_10_year_risk(
                 age=age,
@@ -381,14 +434,40 @@ class DecisionSupportInterface():
                     "categories": risk_categories,
                     "fig": self._create_risk_chart(risk),
                     "parameters": {
-                        "Total Cholesterol": f"{total_chol} mg/dL",
-                        "HDL Cholesterol": f"{hdl_chol} mg/dL",
-                        "Systolic BP": f"{systolic_bp_value} mmHg",
-                        "On BP Medication": "Yes" if is_treated_bp else "No",
-                        "Current Smoker": "Yes" if is_smoker else "No", 
-                        "Diabetes": "Yes" if has_diabetes else "No"
-                    }
+                        "Total Cholesterol": {
+                            "value": total_chol,
+                            "unit": "mg/dL",
+                            "status": tc_status,
+                            "range": f"{normal_ranges['Total Cholesterol']['min']}--{normal_ranges['Total Cholesterol']['max']}"
+                        },
+                        "HDL Cholesterol": {
+                            "value": hdl_chol,
+                            "unit": "mg/dL",
+                            "status": hdl_status,
+                            "range": f"{normal_ranges['HDL Cholesterol']['min']}--{normal_ranges['HDL Cholesterol']['max']}"
+                        },
+                        "Systolic BP": {
+                            "value": systolic_bp_value,
+                            "unit": "mmHg",
+                            "status": bp_status,
+                            "range": f"{normal_ranges['Systolic BP']['min']}--{normal_ranges['Systolic BP']['max']}"
+                        },
+                        "On BP Medication": {
+                            "value": is_treated_bp,
+                            "status": "warning" if is_treated_bp else "normal"
+                        },
+                        "Current Smoker": {
+                            "value": is_smoker,
+                            "status": "high" if is_smoker else "normal"
+                        }, 
+                        "Diabetes": {
+                            "value": has_diabetes,
+                            "status": "high" if has_diabetes else "normal"
+                        }
+                    },
+                    "sex": sex
                 }
+        
 
         cached_result = st.session_state[risk_cache_key]
 
@@ -409,7 +488,32 @@ class DecisionSupportInterface():
                     st.subheader("Risk Calculation Parameters")
                     
                     for param, value in cached_result["parameters"].items():
-                        st.markdown(f"**{param}:** {value}")
+
+                        if isinstance(value, dict) and "unit" in value and "range" in value:
+                            status = value['status']
+                            display_value = f"{value['value']} {value['unit']}"
+                            normal_range = f"(Normal: {value['range']} {value['unit']})"
+                            
+                            if status == "high":
+                                st.markdown(f"**{param}:** :red[**{display_value}**] {normal_range}")
+                            elif status == "low":
+                                st.markdown(f"**{param}:** :orange[**{display_value}**] {normal_range}")
+                            else:
+                                st.markdown(f"**{param}: {display_value}** {normal_range}")
+                    
+                        # For boolean parameters
+                        elif isinstance(value, dict) and "value" in value and "status" in value:
+                            bool_value = value["value"]
+                            
+                            if param == "Current Smoker" and bool_value:
+                                st.markdown(f"**{param}:** :red[**Yes**]")
+                            elif param == "Diabetes" and bool_value:
+                                st.markdown(f"**{param}:** :red[**Yes**]")
+                            elif param == "On BP Medication" and bool_value:
+                                st.markdown(f"**{param}:** :orange[**Yes**]")
+                            else:
+                                st.markdown(f"**{param}:** No")
+                            
                     
                     risk_score = cached_result["risk"]
                     st.markdown("---")
@@ -492,6 +596,26 @@ class DecisionSupportInterface():
                 patient_data["is_smoker"], 
                 patient_data["has_diabetes"]
             )
+        with st.expander("ASCVD Information"):
+                st.markdown("""
+                    **Atherosclerotic Cardiovascular Disease (ASCVD) Risk Assessment** estimates the likelihood 
+                    of experiencing a heart attack or stroke in the next 10 years.
+                    
+                    This calculation uses the 2013 ACC/AHA Pooled Cohort Equations and considers:
+                    - Age and sex
+                    - Total cholesterol and HDL cholesterol
+                    - Systolic blood pressure and treatment status
+                    - Smoking status
+                    - Diabetes status
+                    
+                    **10-Year Risk categories:**
+                    - **Low risk:** <5% 
+                    - **Borderline risk:** 5-7.5% 
+                    - **Intermediate risk:** 7.5-20%
+                    - **High risk:** >20%
+                            
+                    *The calculator is intended for patients aged 40-79 without existing ASCVD.*
+            """)
 
         with st.expander("Health Forecasting", expanded=True):
             self._display_forecasting(patient_id)
@@ -581,6 +705,9 @@ class DecisionSupportInterface():
                     st.session_state.authenticated = False
                     st.rerun()
 
+        if 'previous_search_query' not in st.session_state:
+            st.session_state.previous_search_query = ""
+
         with st.form(key='search_form'):
             search_col1, search_col2 = st.columns([3, 1])
             with search_col1:
@@ -592,9 +719,18 @@ class DecisionSupportInterface():
                 submit_button = st.form_submit_button("Search")
             
             if submit_button:
-                with st.spinner("Searching..."):
-                    st.session_state.search_results = self.search_patients(search_query, st.session_state.patient_ids)
-                    st.session_state.loaded_patients = {}  # Reset loaded patients cache
+                if search_query != st.session_state.previous_search_query:
+
+                    st.session_state.previous_search_query = search_query
+                
+                    st.session_state.loaded_patients = {}
+                
+                    # Clear risk calculation cache
+                    for key in list(st.session_state.keys()):
+                        if key.startswith('risk_'):
+                            del st.session_state[key]
+                        
+                st.session_state.search_results = self.search_patients(search_query, st.session_state.patient_ids)
         
         if 'search_results' in st.session_state and st.session_state.search_results:
             filtered_patients = st.session_state.search_results
