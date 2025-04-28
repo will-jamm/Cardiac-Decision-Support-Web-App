@@ -191,7 +191,7 @@ class DecisionSupportInterface():
             x=['Risk Score'],
             y=[risk_value],
             
-            width=0.6,
+            width=0.2,
             marker=dict(                  
                 color='#FF8C00',
                 opacity=0.8,              
@@ -220,7 +220,7 @@ class DecisionSupportInterface():
             text="<b>Chance of heart attack or stroke</b>",
             font=dict(weight='bold'),
             x=0.5,  
-            xanchor='center'  # Anchor point for centering
+            xanchor='center'  
             ),
             yaxis=dict(
             title=dict(text="<b>Risk (%)</b>", font=dict(weight='bold')),
@@ -230,7 +230,7 @@ class DecisionSupportInterface():
             showticklabels=False
             ),
             height=370,
-            width=300,
+            width=200,
             margin=dict(l=20, r=20, t=40, b=40),  # Increased bottom margin
             showlegend=False
         )
@@ -291,7 +291,7 @@ class DecisionSupportInterface():
                 sex=sex,  
                 total_cholesterol=total_chol,
                 hdl_cholesterol=hdl_chol,
-                systolic_bp=systolic_bp,
+                systolic_bp=systolic_bp_value,
                 isBpTreated=is_treated_bp,
                 isSmoker=is_smoker,
                 hasDiabetes=has_diabetes
@@ -318,7 +318,7 @@ class DecisionSupportInterface():
                     "parameters": {
                         "Total Cholesterol": f"{total_chol} mg/dL",
                         "HDL Cholesterol": f"{hdl_chol} mg/dL",
-                        "Systolic BP": f"{systolic_bp} mmHg",
+                        "Systolic BP": f"{systolic_bp_value} mmHg",
                         "On BP Medication": "Yes" if is_treated_bp else "No",
                         "Current Smoker": "Yes" if is_smoker else "No", 
                         "Diabetes": "Yes" if has_diabetes else "No"

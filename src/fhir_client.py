@@ -271,7 +271,6 @@ class FHIRClient(object):
         history = self.get_cholesterol_history(patient_id)
         if history and len(history) > 0:
             latest = history[-1]
-            print(latest)
             return {
                 "value": latest['value'],
                 "date": latest['formatted_date']
