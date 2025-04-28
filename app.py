@@ -8,6 +8,9 @@ from src import charts
 from src.ascvd_risk_calculator import ASCVDRiskCalculator
 from src.forecast import get_patient_name_by_id, forecasting
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 st.set_page_config(layout="wide")
 
@@ -90,7 +93,7 @@ class DecisionSupportInterface():
                     
         return results
 
-    def display_patient_information(self, demographics, weight, height, cholesterol_data):
+    def display_patient_information(self, demographics, weight, height, cholesterol_data, systolic_bp, is_bp_treated, is_smoker, has_diabetes):
 
         if len(weight) == 0:
             latest_weight = "No data"
@@ -104,8 +107,35 @@ class DecisionSupportInterface():
             latest_height = height[-1]['display']
             height_date = height[-1]['formatted_date']
         
-        total_cholesterol = cholesterol_data['total_cholesterol']
-        hdl_cholesterol = cholesterol_data['hdl_cholesterol']
+        total_chol = cholesterol_data['total_cholesterol']
+        hdl_chol = cholesterol_data['hdl_cholesterol']
+
+        if isinstance(total_chol, dict) and 'value' in total_chol:
+            latest_total_chol = total_chol.get('value', "No data")
+            total_chol_date = total_chol.get('date', "")
+        else:
+            latest_total_chol = "No data"
+            total_chol_date = ""
+
+        if isinstance(hdl_chol, dict) and 'value' in hdl_chol:
+            latest_hdl_chol = hdl_chol.get('value', "No data")
+            hdl_chol_date = hdl_chol.get('date', "")
+        else:
+            latest_hdl_chol = "No data"
+            hdl_chol_date = ""
+
+        if isinstance(systolic_bp, dict) and 'value' in systolic_bp:
+            latest_systolic_bp = systolic_bp.get('value', "No data")
+            systolic_bp_date = systolic_bp.get('date', "")
+
+        elif isinstance(systolic_bp, list) and len(systolic_bp) > 0:
+
+            latest_systolic_bp = systolic_bp[-1].get('value', "No data")
+            systolic_bp_date = systolic_bp[-1].get('formatted_date', "")
+        else:
+            latest_systolic_bp = "No data"
+            systolic_bp_date = ""
+
 
         if demographics:
             given, surname, birthdate, age, sex = demographics
@@ -124,131 +154,220 @@ class DecisionSupportInterface():
                 with st.container(border=True):
                     st.subheader("Patient Vitals")
                     
-                    if latest_height == "No data":
-                        st.write(f"**Height:** **{latest_height}**")
-                    else:
-                        st.write(f"**Height:** **{latest_height}** ({height_date})")
-        
-                    if latest_weight == "No data":
-                        st.write(f"**Weight:** **{latest_weight}**")
-                    else:
-                        st.write(f"**Weight:** **{latest_weight}** ({weight_date})")
+                    col3, col4 = st.columns(2)
+                    with col3:
+                        if latest_height == "No data":
+                            st.write(f"**Height:** {latest_height}")
+                        else:
+                            st.write(f"**Height:** **{latest_height}** ({height_date})")
+            
+                        if latest_weight == "No data":
+                            st.write(f"**Weight:** {latest_weight}")
+                        else:
+                            st.write(f"**Weight:** **{latest_weight}** ({weight_date})")
 
-                    st.write(f"**Total cholesterol:** {total_cholesterol} mg/dL")
-                    st.write(f"**HDL cholesterol:** {hdl_cholesterol} mg/dL")
+                        if latest_total_chol== "No data":
+                            st.write(f"**Total cholesterol:** {latest_total_chol}")
+                        else:
+                            st.write(f"**Total cholesterol:** **{latest_total_chol} mg/dL** ({total_chol_date})")
+                        
+                        if latest_hdl_chol == "No data":
+                            st.write(f"**HDL cholesterol:** {latest_hdl_chol}")
+                        else:
+                            st.write(f"**HDL cholesterol:** **{latest_hdl_chol} mg/dL**  ({hdl_chol_date})")
+                    
+                    with col4:
+                        if latest_systolic_bp == "No data":
+                            st.write(f"**Systolic BP:** {latest_systolic_bp}")
+                        else:
+                            st.write(f"**Systolic BP:** **{latest_systolic_bp} mmHg**  ({systolic_bp_date})")
 
-    def _create_risk_chart(self, risk_value, risk_categories):
-
-        categories = list(risk_categories.keys())
-        thresholds = list(risk_categories.values())
-        colors = ['#E3F2FD', '#90CAF9', '#42A5F5', '#1565C0']
-        ranges = [0] + thresholds + [100]
+    
+    def _create_risk_chart(self, risk_value):
 
         fig = go.Figure()
         
-        for i in range(len(colors)):
-            fig.add_trace(go.Bar(
-                x=[ranges[i+1] - ranges[i]],
-                y=[''],
-                orientation='h',
-                marker=dict(color=colors[i]),
-                base=ranges[i],
-                showlegend=False,
-                hoverinfo='none'
-            ))
+        fig.add_trace(go.Bar(
+            x=['Risk Score'],
+            y=[risk_value],
+            
+            width=0.6,
+            marker=dict(                  
+                color='#FF8C00',
+                opacity=0.8,              
+                line=dict(                 
+                    color='black',      
+                    width=1.5             
+                ),
+                pattern=dict(              
+                    shape="/",         
+                    solidity=0.5        
+                )
+            ),
+            name='Patient Risk',
+            text=[f"<b>{risk_value:.1f}%</b>"],  # Bold text with 1 decimal place
+            textposition='outside',              # Position the text above the bar
+            textfont=dict(
+                size=16,                         # Larger text
+                color='black',                   # Black text color
+                family='Arial Black'             # Bold font family
+            )
+        ))
         
-        for i in thresholds:
-            fig.add_annotation(
-            x=i,
-            y=0.5,
-            text=f"{i:.1f}%",
-            showarrow=False,
-            font=dict(size=13, color='black')
+
+        fig.update_layout(
+            title=dict(
+            text="<b>Chance of heart attack or stroke</b>",
+            font=dict(weight='bold'),
+            x=0.5,  
+            xanchor='center'  # Anchor point for centering
+            ),
+            yaxis=dict(
+            title=dict(text="<b>Risk (%)</b>", font=dict(weight='bold')),
+            range=[0, 100]
+            ),
+            xaxis=dict(
+            showticklabels=False
+            ),
+            height=370,
+            width=300,
+            margin=dict(l=20, r=20, t=40, b=40),  # Increased bottom margin
+            showlegend=False
         )
 
         fig.add_annotation(
-            x=risk_value,
-            y=0.5,
-            text=f"{risk_value:.1f}%",
+            xref="paper",
+            yref="paper",
+            x=0.5,  
+            y=-0.15,
+            text="<b>10-Year Risk</b>",
             showarrow=False,
-            font=dict(size=13, color='black')
-        )
-        
-
-        fig.add_trace(go.Scatter(
-            x=[risk_value],
-            y=[0],
-            mode='markers',
-            marker=dict(color='black', size=15, symbol='triangle-up'),
-            showlegend=False
-        ))
-        
-        for trace in fig.data:
-            if isinstance(trace, go.Bar):
-                trace.marker.line = dict(color='black', width=2)
-
-        fig.update_layout(
-            title=f"10-Year ASCVD Risk:",
-            height=350,
-            width=800,
-            margin=dict(l=50, r=50, t=80, b=80),
-            xaxis=dict(
-            range=[0, risk_value],
-            showgrid=False
-            ),
-            yaxis=dict(
-            showticklabels=True,
-            showgrid=False
-            ),
-            barmode='stack',
-            plot_bgcolor='white'
-        )
+            font=dict(
+                size=14,
+                weight='bold'
+            )
+        )   
         
         return fig
     
     def display_risk_score(self, demographics, cholesterol_data, systolic_bp, is_treated_bp, is_smoker, has_diabetes):
 
-        if not cholesterol_data or not systolic_bp or not demographics:
-            st.info("Not enough data to calculate ASCVD risk.")
-            return
+        risk_cache_key = f"risk_{demographics[0]}_{demographics[1]}"
 
-        total_chol = cholesterol_data.get("total_cholesterol")
-   
-        hdl_chol = cholesterol_data.get("hdl_cholesterol")
+        if risk_cache_key not in st.session_state:
 
-        if not total_chol or not hdl_chol:
-            st.info("Missing cholesterol data for risk calculation.")
-            return
+            if not demographics:
+                st.session_state[risk_cache_key] = {"status": "insufficient_data"}
+                return
 
-        _, _, _, age, sex = demographics
+            total_chol_data = cholesterol_data.get('total_cholesterol')
+            hdl_chol_data = cholesterol_data.get('hdl_cholesterol')
+            
+            if not total_chol_data or not hdl_chol_data:
+                st.info("Missing cholesterol data for risk calculation.")
+                return
+                
+            if not isinstance(total_chol_data, dict) or 'value' not in total_chol_data or not total_chol_data['value']:
+                st.info("Missing cholesterol data for risk calculation.")
+                return
+                
+            if not isinstance(hdl_chol_data, dict) or 'value' not in hdl_chol_data or not hdl_chol_data['value']:
+                st.info("Missing cholesterol data for risk calculation.")
+                return
+                
+            if not systolic_bp or not isinstance(systolic_bp, dict) or 'value' not in systolic_bp:
+                st.info("Missing systolic BP data for risk calculation.")
+                return
+                
+            total_chol = total_chol_data['value']
+            hdl_chol = hdl_chol_data['value']
+            systolic_bp_value = systolic_bp['value']
 
-        risk_calc = ASCVDRiskCalculator()
-        risk = risk_calc.compute_10_year_risk(
-            age=age,
-            sex=sex,  
-            total_cholesterol=total_chol,
-            hdl_cholesterol=hdl_chol,
-            systolic_bp=systolic_bp,
-            isBpTreated=is_treated_bp,
-            isSmoker=is_smoker,
-            hasDiabetes=has_diabetes
-        )
+            _, _, _, age, sex = demographics
 
-        risk_categories = {
-            "Low Risk": 5.0,
-            "Moderate Risk": 7.5,
-            "High Risk": 20.0
-        }
-        
-        if isinstance(risk, dict):  # handle validation error
-            st.warning(risk['message'])
-        else:
-            fig = self._create_risk_chart(risk, risk_categories)
-
-            st.plotly_chart(
-                fig
+            risk_calc = ASCVDRiskCalculator()
+            risk = risk_calc.compute_10_year_risk(
+                age=age,
+                sex=sex,  
+                total_cholesterol=total_chol,
+                hdl_cholesterol=hdl_chol,
+                systolic_bp=systolic_bp,
+                isBpTreated=is_treated_bp,
+                isSmoker=is_smoker,
+                hasDiabetes=has_diabetes
             )
-            st.write(f"**10-Year ASCVD Risk Score: {risk:.1f}%**")
+
+            risk_categories = {
+                "Low Risk": 5.0,
+                "Moderate Risk": 7.5,
+                "High Risk": 20.0
+            }
+            
+            if isinstance(risk, dict):
+                st.session_state[risk_cache_key] = {
+                    "status": "error",
+                    "message": risk['message']
+                }
+
+            else:
+                st.session_state[risk_cache_key] = {
+                    "status": "success",
+                    "risk": risk,
+                    "categories": risk_categories,
+                    "fig": self._create_risk_chart(risk),
+                    "parameters": {
+                        "Total Cholesterol": f"{total_chol} mg/dL",
+                        "HDL Cholesterol": f"{hdl_chol} mg/dL",
+                        "Systolic BP": f"{systolic_bp} mmHg",
+                        "On BP Medication": "Yes" if is_treated_bp else "No",
+                        "Current Smoker": "Yes" if is_smoker else "No", 
+                        "Diabetes": "Yes" if has_diabetes else "No"
+                    }
+                }
+
+        cached_result = st.session_state[risk_cache_key]
+
+        if cached_result["status"] == "insufficient_data":
+            st.info("Not enough data to calculate ASCVD risk.")
+        elif cached_result["status"] == "missing_cholesterol":
+            st.info("Missing cholesterol data for risk calculation.")
+        elif cached_result["status"] == "error":
+            st.warning(cached_result["message"])
+        else:
+            left_col, right_col = st.columns([1, 1])
+
+            with left_col:
+                st.plotly_chart(cached_result["fig"], use_container_width=True)
+            
+            with right_col:
+            # Display risk calculation parameters
+                with st.container(border=True):
+                    st.subheader("Risk Calculation Parameters")
+                    
+                    for param, value in cached_result["parameters"].items():
+                        st.markdown(f"**{param}:** {value}")
+                    
+                    # Add risk interpretation based on score
+                    risk_score = cached_result["risk"]
+                    st.markdown("---")
+                    st.markdown("### 10-Year Risk Interpretation")
+                    
+                    if risk_score < 5.0:
+                        st.markdown("**Low risk: < 5%**")
+                        st.markdown("• Consider lifestyle modifications")
+                    elif risk_score < 7.5:
+                        st.markdown("**Borderline risk: 5-7.5%**")
+                        st.markdown("• Consider moderate intensity statin")
+                        st.markdown("• Emphasize lifestyle modifications")
+                    elif risk_score < 20.0:
+                        st.markdown("**Intermediate risk: 7.5-20%**")
+                        st.markdown("• Moderate intensity statin recommended")
+                        st.markdown("• Consider BP management if elevated")
+                    else:
+                        st.markdown("**High risk: > 20%**")
+                        st.markdown("• High intensity statin strongly recommended")
+                        st.markdown("• Aggressive management of all risk factors")
+                        st.markdown("• Consider aspirin for select patients")
             
     def _display_patient_dashboard(self, patient_id):
         cache_key = f"patient_{patient_id}"
@@ -268,6 +387,9 @@ class DecisionSupportInterface():
         systolic_bp_history = patient_data["systolic_bp_history"]
         diastolic_bp_history = patient_data["diastolic_bp_history"]
         hr_history = patient_data["hr_history"]
+        is_bp_treated = patient_data["is_treated_bp"], 
+        is_smoker = patient_data["is_smoker"], 
+        has_diabetes = patient_data["has_diabetes"]
 
         cholesterol_data = {
             "total_cholesterol": patient_data["total_chol"],
@@ -275,10 +397,14 @@ class DecisionSupportInterface():
         }
 
         self.display_patient_information(
-            demographics=demographics, 
-            weight=weight_history, 
-            height=height_history, 
-            cholesterol_data=cholesterol_data
+            demographics, 
+            weight_history, 
+            height_history, 
+            cholesterol_data,
+            systolic_bp_history,
+            is_bp_treated,
+            is_smoker,
+            has_diabetes
         )
 
         with st.expander("Health Trends", expanded=True):
@@ -305,7 +431,7 @@ class DecisionSupportInterface():
                 patient_data["has_diabetes"]
             )
 
-        with st.expander("Health Forecasting", expanded=False):
+        with st.expander("Health Forecasting", expanded=True):
             self._display_forecasting(patient_id)
 
     def _display_forecasting(self, patient_id):
@@ -313,11 +439,9 @@ class DecisionSupportInterface():
 
         df = pd.read_csv("src/out.csv")
     
-    
         allowed_features = [
             "bmi",
             "weight",
-            "height", 
             "heart_rate",
             "Systolic blood pressure", 
             "Diastolic blood pressure"
@@ -382,8 +506,7 @@ class DecisionSupportInterface():
         st.title("CARDICARE Cardiac Health Support Interface")
 
         if 'patient_ids' not in st.session_state:
-            with st.spinner("Loading patient database.."):
-                st.session_state.patient_ids = self.client.get_all_patient_ids()
+            st.session_state.patient_ids = self.client.get_all_patient_ids()
             
         with st.sidebar:
             st.text("")
@@ -420,6 +543,7 @@ class DecisionSupportInterface():
             st.warning("No matching patients found")
 
     def main(self):
+        
         self.dashboard()
 
 if __name__ == "__main__":

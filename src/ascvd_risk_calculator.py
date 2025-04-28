@@ -79,13 +79,8 @@ class ASCVDRiskCalculator:
 
         predict += coef['diabetes'] * int(hasDiabetes)
             
-        print(coef['baseline_survival'])  
-        print(predict)
-
         risk_percent = (1 - (baseline_survival ** np.exp(predict - mean_term))) * 100
             
-        print("Risk score:")
-        print(risk_percent)
         return risk_percent
 
     def _validate_inputs(self, age, sex, total_cholesterol, hdl_cholesterol, systolic_bp):

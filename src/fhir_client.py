@@ -54,7 +54,6 @@ class FHIRClient(object):
         if isinstance(reference_date, str):
             reference_date = datetime.strptime(reference_date, '%d-%m-%Y')
                 
-        # Calculate age
         return reference_date.year - born.year - ((reference_date.month, reference_date.day) < (born.month, born.day))
     
     def get_all_patient_ids(self):
@@ -270,9 +269,14 @@ class FHIRClient(object):
     def get_latest_total_cholesterol(self, patient_id):
         """Get the latest total cholesterol value for a patient"""
         history = self.get_cholesterol_history(patient_id)
-        if history:
-            return history[-1]['value']  # Return the most recent value
-        return None
+        if history and len(history) > 0:
+            latest = history[-1]
+            print(latest)
+            return {
+                "value": latest['value'],
+                "date": latest['formatted_date']
+            }
+        return None 
 
     def get_latest_hdl_cholesterol(self, patient_id):
         """Get the latest HDL cholesterol value for a patient"""
@@ -283,15 +287,24 @@ class FHIRClient(object):
             default_unit='mg/dL',
             name='hdl'
         )
-        if history:
-            return history[-1]['value']
+        if history and len(history) > 0:
+            latest = history[-1]
+            return {
+                "value": latest['value'],
+                "date": latest['formatted_date']
+            }  
+            
         return None
 
     def get_latest_systolic_bp(self, patient_id):
         """Get the latest systolic blood pressure value for a patient"""
         history = self.get_systolic_blood_pressure_history(patient_id)
-        if history:
-            return history[-1]['value']
+        if history and len(history) > 0:
+            latest = history[-1]
+            return {
+                "value": latest['value'],
+                "date": latest['formatted_date']
+            }
         return None
 
     def is_patient_on_bp_medication(self, patient_id):
