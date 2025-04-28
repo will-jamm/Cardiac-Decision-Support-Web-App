@@ -135,7 +135,7 @@ def plot_weight_height_bmi(weight_history, height_history, bmi_history, demograp
                     x_centers_bmi.append(x_centers_weight[j])
 
         # Plot height and weight data
-        ax1.plot(x_centers_weight, weight_values, 'o-', linewidth=1.5, color='#1F5E61', label="Weight")
+        ax1.plot(x_centers_weight, weight_values, 'o-', linewidth=1.5, color='brown', label="Weight")
         ax1.plot(x_centers_height, height_values, 'o-', linewidth=1.5, color='#004C99', label="Height")
 
         # Add background color for BMI ranges
@@ -194,7 +194,7 @@ def plot_weight_height_bmi(weight_history, height_history, bmi_history, demograp
         # Customize labels
         legend_elements = [
             mlines.Line2D([], [], color='#004C99', linewidth=1.5, marker='o', label='Height'),
-            mlines.Line2D([], [], color='#1F5E61', linewidth=1.5, marker='o', label='Weight'),
+            mlines.Line2D([], [], color='brown', linewidth=1.5, marker='o', label='Weight'),
             mlines.Line2D([], [], color='none', label='BMI:'),
             mlines.Line2D([], [], color='black', markeredgecolor='#FF0000', marker='o',
                           markerfacecolor='white', markersize=8, markeredgewidth=2, label='Obese'),
@@ -394,7 +394,7 @@ def plot_blood_pressure(systolic_history, diastolic_history, demographics, clien
 
     # Plot BP points
     ax.plot(x_centers, systolic_values, '-', linewidth=2, color='black')
-    ax.plot(x_centers, diastolic_values, '-', linewidth=2, color='yellow')
+    ax.plot(x_centers, diastolic_values, '-', linewidth=2, color='brown')
 
     for i in range(len(dates)):
         x_center = x_centers[i]
@@ -437,7 +437,7 @@ def plot_blood_pressure(systolic_history, diastolic_history, demographics, clien
     legend_elements = [
         mlines.Line2D([], [], color='black', marker='o', markerfacecolor='white', markersize=8,
                       markeredgewidth=2, label='Systolic'),
-        mlines.Line2D([], [], color='yellow', marker='o', markerfacecolor='white', markersize=8,
+        mlines.Line2D([], [], color='brown', marker='o', markerfacecolor='white', markersize=8,
                       markeredgewidth=2, label='Diastolic'),
         mlines.Line2D([], [], color='black', markeredgecolor='red', marker='o',
                       markerfacecolor='white', markersize=8, markeredgewidth=2, label='Elevated'),
