@@ -8,14 +8,22 @@ from src import charts
 from src.ascvd_risk_calculator import ASCVDRiskCalculator
 from src.forecast import get_patient_name_by_id, forecasting
 import os
+import hashlib
 from dotenv import load_dotenv
 
+
 load_dotenv()
+
+ADMIN_USERNAME = os.getenv("CARDICARE_USERNAME")
+ADMIN_PASSWORD = os.getenv("CARDICARE_PASSWORD")
+DOCTOR_NAME = os.getenv("DOCTOR_NAME")
+DOCTOR_ID = os.getenv("DOCTOR_ID")
 
 st.set_page_config(layout="wide")
 
 JSON_DATABASE = 'data/json_database.json'
 fullUrl = "http://tutsgnfhir.com"
+
 
 class DecisionSupportInterface():
     def __init__(self):
@@ -29,6 +37,63 @@ class DecisionSupportInterface():
                 )
     
         self.client = st.session_state.client
+    def authenticate_user(self, username, password):
+        """
+        Authenticate user against credentials stored in .env file
+        
+        Parameters:
+        -----------
+        username : str
+            The username entered by user
+        password : str
+            The password entered by user
+            
+        Returns:
+        --------
+        bool
+            True if authentication successful, False otherwise
+        """
+    
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+        
+        if username == ADMIN_USERNAME:
+            if hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest() == hashed_password:
+                return True
+        
+        return False
+    
+    def show_login_page(self):
+        """Display the login form"""
+        
+        
+        with st.container():
+            # Center the login form
+            col1, col2, col3 = st.columns([1, 2, 1])
+            
+            with col2:
+                st.title("CardiCare Clinical Decision Support System")
+                st.subheader("Provider Login")
+                
+                with st.form("login_form"):
+                    username = st.text_input("Username")
+                    password = st.text_input("Password", type="password")
+                    login_button = st.form_submit_button("Log In")
+                    
+                    if login_button:
+                        if self.authenticate_user(username, password):
+                            st.session_state.authenticated = True
+                            st.rerun()
+                            st.success("Login successful!")
+        
+                        else:
+                            st.error("Invalid username or password")
+                
+                with st.expander("System Information"):
+                    st.info(
+                        "This is a clinical decision support system for cardiovascular risk assessment. "
+                        "Please log in with your provider credentials to access patient data."
+                    )
+                    st.write("© 2025 WeCare Health Systems")
 
     @st.cache_data(ttl=3600)
     def load_patient_data(_client, patient_id):
@@ -205,12 +270,12 @@ class DecisionSupportInterface():
                 )
             ),
             name='Patient Risk',
-            text=[f"<b>{risk_value:.1f}%</b>"],  # Bold text with 1 decimal place
-            textposition='outside',              # Position the text above the bar
+            text=[f"<b>{risk_value:.1f}%</b>"],  
+            textposition='outside',             
             textfont=dict(
-                size=16,                         # Larger text
-                color='black',                   # Black text color
-                family='Arial Black'             # Bold font family
+                size=16,                         
+                color='black',                   
+                family='Arial Black'      
             )
         ))
         
@@ -231,7 +296,7 @@ class DecisionSupportInterface():
             ),
             height=370,
             width=200,
-            margin=dict(l=20, r=20, t=40, b=40),  # Increased bottom margin
+            margin=dict(l=20, r=20, t=40, b=40),  
             showlegend=False
         )
 
@@ -340,14 +405,12 @@ class DecisionSupportInterface():
                 st.plotly_chart(cached_result["fig"], use_container_width=True)
             
             with right_col:
-            # Display risk calculation parameters
                 with st.container(border=True):
                     st.subheader("Risk Calculation Parameters")
                     
                     for param, value in cached_result["parameters"].items():
                         st.markdown(f"**{param}:** {value}")
                     
-                    # Add risk interpretation based on score
                     risk_score = cached_result["risk"]
                     st.markdown("---")
                     st.markdown("### 10-Year Risk Interpretation")
@@ -378,7 +441,6 @@ class DecisionSupportInterface():
 
         patient_data = st.session_state.loaded_patients[cache_key]
 
-        # Extract data from the cache
         demographics = patient_data["demographics"]
         weight_history = patient_data["weight_history"]
         height_history = patient_data["height_history"]
@@ -503,13 +565,21 @@ class DecisionSupportInterface():
                         st.plotly_chart(fig, use_container_width=True)
 
     def dashboard(self):
+        doctor_name = DOCTOR_NAME
+        doctor_id = DOCTOR_ID
         st.title("CARDICARE Cardiac Health Support Interface")
-
         if 'patient_ids' not in st.session_state:
             st.session_state.patient_ids = self.client.get_all_patient_ids()
             
         with st.sidebar:
-            st.text("")
+            with st.container(border=True):
+                st.markdown(f"**{doctor_name}**")
+                st.markdown(f"**{doctor_id}**")
+                st.write("")
+
+                if st.button("Logout", use_container_width=True):
+                    st.session_state.authenticated = False
+                    st.rerun()
 
         with st.form(key='search_form'):
             search_col1, search_col2 = st.columns([3, 1])
@@ -544,7 +614,13 @@ class DecisionSupportInterface():
 
     def main(self):
         
-        self.dashboard()
+        if 'authenticated' not in st.session_state:
+            st.session_state.authenticated = False
+        
+        if not st.session_state.authenticated:
+            self.show_login_page()
+        else:
+            self.dashboard()
 
 if __name__ == "__main__":
     app = DecisionSupportInterface()
