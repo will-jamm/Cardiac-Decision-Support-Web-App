@@ -138,7 +138,7 @@ class DecisionSupportInterface():
 
     def search_patients(self, query, patient_ids):
     
-        if not query:
+        if not query or len(query) <= 5:
             return None
         
         query = query.lower()
